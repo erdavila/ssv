@@ -1,16 +1,18 @@
 use std::error::Error;
 use std::fmt::Display;
 
-mod domain;
+use self::position::Position;
+
+pub(crate) mod domain;
 mod fluent_writer;
 mod options;
 mod position;
 mod reader;
-mod tokenizer;
-mod tokens;
+pub mod tokenizer;
+pub mod tokens;
 mod writer;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum LineBreak {
     Lf,
     CrLf,
@@ -21,6 +23,7 @@ type WriteResult<T> = Result<T, WriteError>;
 
 #[derive(Debug)]
 pub enum ReadError {
+    UnpairedQuote(Position),
     IoError(std::io::Error),
 }
 
@@ -29,6 +32,11 @@ impl Error for ReadError {}
 impl Display for ReadError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            ReadError::UnpairedQuote(position) => write!(
+                f,
+                "unpaired quote at {}:{}",
+                position.line_number, position.column_number
+            ),
             ReadError::IoError(error) => write!(f, "IO Error: {error}"),
         }
     }

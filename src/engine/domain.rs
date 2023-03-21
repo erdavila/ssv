@@ -1,16 +1,34 @@
+use std::fmt::Debug;
 use std::io::{BufRead, BufReader, Bytes, Read};
 
-pub trait Domain {
-    type Element;
+pub trait Domain: Eq {
+    type Element: Copy + Eq;
     type ElementIterator<R: Read>: Iterator<Item = std::io::Result<Self::Element>>;
-    type String;
+    type String: DomainString<Self::Element> + Default + Eq + Debug;
     type StringSlice: ?Sized;
 
     const LF: Self::Element;
+    const CR: Self::Element;
+    const QUOTE: Self::Element;
+    const HASH: Self::Element;
 
+    fn is_spacing_element(element: Self::Element) -> bool;
     fn element_iterator<R: Read>(inner: R) -> Self::ElementIterator<R>;
 }
 
+pub trait DomainString<E>: Sized {
+    fn new() -> Self;
+    fn push(&mut self, element: E);
+    fn quotes(length: usize) -> Self;
+
+    fn from_element(element: E) -> Self {
+        let mut string = Self::new();
+        string.push(element);
+        string
+    }
+}
+
+#[derive(PartialEq, Eq, Debug)]
 pub struct BytesDomain;
 impl Domain for BytesDomain {
     type Element = u8;
@@ -19,12 +37,34 @@ impl Domain for BytesDomain {
     type StringSlice = [u8];
 
     const LF: Self::Element = b'\n';
+    const CR: Self::Element = b'\r';
+    const QUOTE: Self::Element = b'"';
+    const HASH: Self::Element = b'#';
+
+    fn is_spacing_element(element: Self::Element) -> bool {
+        matches!(element, b' ' | b'\t')
+    }
 
     fn element_iterator<R: Read>(inner: R) -> Self::ElementIterator<R> {
         inner.bytes()
     }
 }
 
+impl DomainString<u8> for Vec<u8> {
+    fn new() -> Self {
+        Vec::new()
+    }
+
+    fn push(&mut self, element: u8) {
+        Vec::push(self, element);
+    }
+
+    fn quotes(length: usize) -> Self {
+        [BytesDomain::QUOTE].repeat(length)
+    }
+}
+
+#[derive(PartialEq, Eq, Debug)]
 pub struct CharsDomain;
 impl Domain for CharsDomain {
     type Element = char;
@@ -33,12 +73,33 @@ impl Domain for CharsDomain {
     type StringSlice = str;
 
     const LF: Self::Element = '\n';
+    const CR: Self::Element = '\r';
+    const QUOTE: Self::Element = '"';
+    const HASH: Self::Element = '#';
+
+    fn is_spacing_element(element: Self::Element) -> bool {
+        matches!(element, ' ' | '\t')
+    }
 
     fn element_iterator<R: Read>(inner: R) -> Self::ElementIterator<R> {
         Chars {
             inner: BufReader::new(inner),
             chars: None,
         }
+    }
+}
+
+impl DomainString<char> for String {
+    fn new() -> Self {
+        String::new()
+    }
+
+    fn push(&mut self, element: char) {
+        String::push(self, element);
+    }
+
+    fn quotes(length: usize) -> Self {
+        Self::from_element(CharsDomain::QUOTE).repeat(length)
     }
 }
 
