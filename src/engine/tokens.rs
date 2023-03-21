@@ -14,7 +14,7 @@ pub enum Token<D: Domain> {
 pub struct UnquotedValue<D: Domain>(pub D::String);
 
 #[derive(Debug)]
-pub struct QuotedValue<D: Domain>(D::String);
+pub struct QuotedValue<D: Domain>(pub D::String);
 
 #[derive(Debug)]
 pub struct Spacing<D: Domain>(D::String);

@@ -7,7 +7,7 @@ use crate::engine::tokens::UnquotedValue;
 use crate::engine::ReadError;
 
 use super::position::{Position, WithPosition};
-use super::tokens::Token;
+use super::tokens::{QuotedValue, Token};
 use super::ReadResult;
 
 pub struct Tokenizer<D: Domain, R: Read> {
@@ -96,21 +96,66 @@ impl<D: Domain, R: Read> Tokenizer<D, R> {
                 }
             }
             State::QuotesPrefix(count) => {
-                if D::is_spacing_element(element) {
-                    todo!()
-                } else if element == D::QUOTE {
+                if element == D::QUOTE {
                     *count += 1;
-                } else if element == D::LF {
-                    todo!()
-                } else if element == D::CR && next_element_is_lf!() {
-                    todo!()
-                } else {
-                    if *count % 2 == 0 {
+                } else if *count % 2 == 0 {
+                    let next_state_after_quoted_value = if D::is_spacing_element(element) {
+                        Some(State::Spacing(D::String::from_element(element)))
+                    } else if element == D::LF {
+                        Some(State::LfLineBreak)
+                    } else if element == D::CR && next_element_is_lf!() {
+                        Some(State::CrInLineBreak)
+                    } else {
+                        None
+                    };
+
+                    if let Some(next_state) = next_state_after_quoted_value {
+                        let value = D::String::quotes((*count - 2) / 2);
+                        self.state = next_state;
+                        return Some(Ok(Token::QuotedValue(QuotedValue(value))));
+                    } else {
                         let mut value = D::String::quotes(*count / 2);
                         value.push(element);
                         self.state = State::UnquotedValue(value);
+                    }
+                } else {
+                    let mut value = D::String::quotes((*count - 1) / 2);
+                    value.push(element);
+                    self.state = State::QuotedValue(value);
+                }
+            }
+            State::QuotedValue(value) => {
+                if element == D::QUOTE {
+                    let value = take(value);
+                    self.state = State::QuoteInQuotedValue(value);
+                } else {
+                    value.push(element);
+                }
+            }
+            State::QuoteInQuotedValue(value) => {
+                if element == D::QUOTE {
+                    value.push(element);
+                    let value = take(value);
+                    self.state = State::QuotedValue(value);
+                } else {
+                    let next_state_after_quoted_value = if D::is_spacing_element(element) {
+                        Some(State::Spacing(D::String::from_element(element)))
+                    } else if element == D::LF {
+                        Some(State::LfLineBreak)
+                    } else if element == D::CR && next_element_is_lf!() {
+                        Some(State::CrInLineBreak)
                     } else {
-                        todo!()
+                        None
+                    };
+
+                    if let Some(next_state) = next_state_after_quoted_value {
+                        let value = take(value);
+                        self.state = next_state;
+                        return Some(Ok(Token::QuotedValue(QuotedValue(value))));
+                    } else {
+                        let mut position = self.position;
+                        position.column_number -= 1;
+                        return Some(Err(ReadError::UnpairedQuote(position)));
                     }
                 }
             }
@@ -131,7 +176,26 @@ impl<D: Domain, R: Read> Tokenizer<D, R> {
                 Some(Ok(Token::UnquotedValue(UnquotedValue(value))))
             }
             State::QuoteInUnquotedValue(_) => Some(Err(ReadError::UnpairedQuote(self.position))),
-            State::QuotesPrefix(_) => todo!(),
+            State::QuotesPrefix(count) => {
+                if *count % 2 == 0 {
+                    let value = D::String::quotes((*count - 2) / 2);
+                    Some(Ok(Token::QuotedValue(QuotedValue(value))))
+                } else {
+                    let mut position = self.position;
+                    position.column_number += 1;
+                    Some(Err(ReadError::UnclosedQuotedValue(position)))
+                }
+            }
+            State::QuotedValue(_) => {
+                let mut position = self.position;
+                position.column_number += 1;
+                Some(Err(ReadError::UnclosedQuotedValue(position)))
+            }
+            State::QuoteInQuotedValue(value) => {
+                let value = take(value);
+                self.state = State::Begin;
+                Some(Ok(Token::QuotedValue(QuotedValue(value))))
+            }
             State::Spacing(_) => todo!(),
             State::LfLineBreak => todo!(),
             State::CrInLineBreak => todo!(),
@@ -195,6 +259,8 @@ enum State<D: Domain> {
     UnquotedValue(D::String),
     QuoteInUnquotedValue(D::String),
     QuotesPrefix(usize),
+    QuotedValue(D::String),
+    QuoteInQuotedValue(D::String),
     Spacing(D::String),
     LfLineBreak,
     CrInLineBreak,

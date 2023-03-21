@@ -24,6 +24,7 @@ type WriteResult<T> = Result<T, WriteError>;
 #[derive(Debug)]
 pub enum ReadError {
     UnpairedQuote(Position),
+    UnclosedQuotedValue(Position),
     IoError(std::io::Error),
 }
 
@@ -35,6 +36,11 @@ impl Display for ReadError {
             ReadError::UnpairedQuote(position) => write!(
                 f,
                 "unpaired quote at {}:{}",
+                position.line_number, position.column_number
+            ),
+            ReadError::UnclosedQuotedValue(position) => write!(
+                f,
+                "unclosed quoted value {}:{}",
                 position.line_number, position.column_number
             ),
             ReadError::IoError(error) => write!(f, "IO Error: {error}"),
