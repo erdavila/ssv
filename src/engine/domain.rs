@@ -2,7 +2,7 @@ use std::fmt::Debug;
 use std::io::{BufRead, BufReader, Bytes, Read};
 
 pub trait Domain: Eq {
-    type Element: Copy + Eq;
+    type Element: Copy + Eq + Debug;
     type ElementIterator<R: Read>: Iterator<Item = std::io::Result<Self::Element>>;
     type String: DomainString<Self::Element> + Default + Eq + Debug;
     type StringSlice: ?Sized;

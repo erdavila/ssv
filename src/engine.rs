@@ -12,7 +12,7 @@ pub mod tokenizer;
 pub mod tokens;
 mod writer;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum LineBreak {
     Lf,
     CrLf,

@@ -4,7 +4,7 @@ use std::mem::take;
 
 use crate::engine::domain::{Domain, DomainString};
 use crate::engine::tokens::UnquotedValue;
-use crate::engine::ReadError;
+use crate::engine::{LineBreak, ReadError};
 
 use super::position::{Position, WithPosition};
 use super::tokens::{QuotedValue, Spacing, Token};
@@ -51,9 +51,9 @@ impl<D: Domain, R: Read> Tokenizer<D, R> {
                 } else if element == D::QUOTE {
                     self.state = State::QuotesPrefix(1);
                 } else if element == D::LF {
-                    todo!()
+                    return Some(Ok(Token::LineBreak(LineBreak::Lf)));
                 } else if element == D::CR && next_element_is_lf!() {
-                    todo!()
+                    self.state = State::CrInLineBreak;
                 } else if element == D::HASH {
                     todo!()
                 } else {
@@ -176,8 +176,25 @@ impl<D: Domain, R: Read> Tokenizer<D, R> {
                     return Some(Ok(Token::Spacing(Spacing(spacing))));
                 }
             }
-            State::LfLineBreak => todo!(),
-            State::CrInLineBreak => todo!(),
+            State::LfLineBreak => {
+                self.state = if D::is_spacing_element(element) {
+                    State::Spacing(D::String::from_element(element))
+                } else if element == D::QUOTE {
+                    State::QuotesPrefix(1)
+                } else if element == D::LF {
+                    State::LfLineBreak
+                } else if element == D::CR && next_element_is_lf!() {
+                    State::CrInLineBreak
+                } else {
+                    State::UnquotedValue(D::String::from_element(element))
+                };
+                return Some(Ok(Token::LineBreak(LineBreak::Lf)));
+            }
+            State::CrInLineBreak => {
+                assert_eq!(element, D::LF);
+                self.state = State::Begin;
+                return Some(Ok(Token::LineBreak(LineBreak::CrLf)));
+            }
         }
 
         None
@@ -217,8 +234,11 @@ impl<D: Domain, R: Read> Tokenizer<D, R> {
                 self.state = State::Begin;
                 Some(Ok(Token::Spacing(Spacing(spacing))))
             }
-            State::LfLineBreak => todo!(),
-            State::CrInLineBreak => todo!(),
+            State::LfLineBreak => {
+                self.state = State::Begin;
+                Some(Ok(Token::LineBreak(LineBreak::Lf)))
+            }
+            State::CrInLineBreak => unreachable!(),
         }
     }
 

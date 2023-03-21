@@ -3,7 +3,7 @@ use std::ops::Deref;
 use crate::engine::domain::{BytesDomain, CharsDomain};
 use crate::engine::tokenizer::Tokenizer;
 use crate::engine::tokens::Token;
-use crate::engine::ReadError;
+use crate::engine::{LineBreak, ReadError};
 use crate::tests::support::{CR, CRLF, LF, Q, TAB};
 use crate::{bformat, domain_format};
 
@@ -36,6 +36,9 @@ macro_rules! _assert_tokenization_domain_assertion {
     ($domain:ident, spacing, $($arg:tt),*) => {
         _assert_tokenization_domain_assertion_token!($domain, Spacing, $($arg),*);
     };
+    ($_domain:ident, line_break, $($arg:tt),*) => {
+        _assert_tokenization_domain_assertion_token!(_no_domain_, LineBreak, $($arg),*);
+    };
     ($_domain:ident, unpaired_quote_error, $($arg:tt),*) => {
         _assert_tokenization_domain_assertion_error!(UnpairedQuote, $($arg),*);
     };
@@ -48,15 +51,24 @@ macro_rules! _assert_tokenization_domain_assertion {
 }
 
 macro_rules! _assert_tokenization_domain_assertion_token {
-    ($domain:ident, $expected_token:ident, $tokenizer:ident, $expected_value:literal, $expected_line_number:literal, $expected_column_number:literal) => {
+    ($domain:ident, $expected_token:ident, $tokenizer:ident, $expected_value:expr, $expected_line_number:literal, $expected_column_number:literal) => {
         let token = $tokenizer.next().unwrap().unwrap();
         if let Token::$expected_token(value) = token.value {
-            assert_eq!(value.0, domain_format!($domain, $expected_value));
+            _assert_tokenization_domain_assertion_token_value!($domain, value, $expected_value);
             assert_eq!(token.position.line_number, $expected_line_number);
             assert_eq!(token.position.column_number, $expected_column_number);
         } else {
             panic!("wrong token: {:?}", token.value);
         }
+    };
+}
+
+macro_rules! _assert_tokenization_domain_assertion_token_value {
+    (_no_domain_, $value:ident, $expected_value:expr) => {
+        assert_eq!($value, $expected_value);
+    };
+    ($domain:ident, $value:ident, $expected_value:expr) => {
+        assert_eq!($value.0, domain_format!($domain, $expected_value));
     };
 }
 
@@ -111,18 +123,16 @@ fn unquoted_value_followed_by_line_break() {
         "abc{LF}",
         [
             unquoted_value("abc", 1, 1),
-            // TODO: make it work
-            // line_break(LineBreak::Lf, 1, 4),
-            // end(),
+            line_break(LineBreak::Lf, 1, 4),
+            end(),
         ]
     );
     assert_tokenization!(
         "abc{CRLF}",
         [
             unquoted_value("abc", 1, 1),
-            // TODO: make it work
-            // line_break(LineBreak::CrLf, 1, 4),
-            // end(),
+            line_break(LineBreak::CrLf, 1, 4),
+            end(),
         ]
     );
 }
@@ -195,18 +205,16 @@ fn quoted_value_followed_by_line_break() {
         "{Q}abc{Q}{LF}",
         [
             quoted_value("abc", 1, 1),
-            // TODO: make it work
-            // line_break(LineBreak::Lf, 1, 6),
-            // end(),
+            line_break(LineBreak::Lf, 1, 6),
+            end(),
         ]
     );
     assert_tokenization!(
         "{Q}abc{Q}{CRLF}",
         [
             quoted_value("abc", 1, 1),
-            // TODO: make it work
-            // line_break(LineBreak::CrLf, 1, 6),
-            // end(),
+            line_break(LineBreak::CrLf, 1, 6),
+            end(),
         ]
     );
 }
@@ -225,18 +233,16 @@ fn quoted_value_containing_only_quotes_followed_by_line_break() {
         "{Q}{Q}{Q}{Q}{LF}",
         [
             quoted_value("{Q}", 1, 1),
-            // TODO: make it work
-            // line_break(LineBreak::Lf, 1, 5),
-            // end(),
+            line_break(LineBreak::Lf, 1, 5),
+            end(),
         ]
     );
     assert_tokenization!(
         "{Q}{Q}{Q}{Q}{CRLF}",
         [
             quoted_value("{Q}", 1, 1),
-            // TODO: make it work
-            // line_break(LineBreak::CrLf, 1, 5),
-            // end(),
+            line_break(LineBreak::CrLf, 1, 5),
+            end(),
         ]
     );
 }
@@ -279,18 +285,103 @@ fn spacing_followed_by_line_break() {
         " {TAB} {LF}",
         [
             spacing(" {TAB} ", 1, 1),
-            // TODO: make it work
-            // line_break(LineBreak::Lf, 1, 4),
-            // end()
+            line_break(LineBreak::Lf, 1, 4),
+            end()
         ]
     );
     assert_tokenization!(
         " {TAB} {CRLF}",
         [
             spacing(" {TAB} ", 1, 1),
-            // TODO: make it work
-            // line_break(LineBreak::CrLf, 1, 4),
-            // end()
+            line_break(LineBreak::CrLf, 1, 4),
+            end()
+        ]
+    );
+}
+
+#[test]
+fn line_break() {
+    assert_tokenization!("{LF}", [line_break(LineBreak::Lf, 1, 1), end()]);
+    assert_tokenization!("{CRLF}", [line_break(LineBreak::CrLf, 1, 1), end()]);
+}
+
+#[test]
+fn line_break_followed_by_unquoted_value() {
+    assert_tokenization!(
+        "{LF}abc",
+        [
+            line_break(LineBreak::Lf, 1, 1),
+            unquoted_value("abc", 2, 1),
+            end(),
+        ]
+    );
+    assert_tokenization!(
+        "{CRLF}abc",
+        [
+            line_break(LineBreak::CrLf, 1, 1),
+            unquoted_value("abc", 2, 1),
+            end(),
+        ]
+    );
+}
+
+#[test]
+fn lf_line_break_following_a_value_and_followed_by_unquoted_value() {
+    assert_tokenization!(
+        "abc{LF}def",
+        [
+            unquoted_value("abc", 1, 1),
+            line_break(LineBreak::Lf, 1, 4),
+            unquoted_value("def", 2, 1),
+            end()
+        ]
+    );
+}
+
+#[test]
+fn lf_line_break_following_a_value_and_followed_by_quoted_value() {
+    assert_tokenization!(
+        "abc{LF}{Q}def{Q}",
+        [
+            unquoted_value("abc", 1, 1),
+            line_break(LineBreak::Lf, 1, 4),
+            quoted_value("def", 2, 1),
+            end()
+        ]
+    );
+}
+
+#[test]
+fn lf_line_break_following_a_value_and_followed_by_spacing() {
+    assert_tokenization!(
+        "abc{LF} {TAB} ",
+        [
+            unquoted_value("abc", 1, 1),
+            line_break(LineBreak::Lf, 1, 4),
+            spacing(" {TAB} ", 2, 1),
+            end()
+        ]
+    );
+}
+
+#[test]
+fn lf_line_break_following_a_value_and_followed_by_line_break() {
+    assert_tokenization!(
+        "abc{LF}{LF}",
+        [
+            unquoted_value("abc", 1, 1),
+            line_break(LineBreak::Lf, 1, 4),
+            line_break(LineBreak::Lf, 2, 1),
+            end()
+        ]
+    );
+    assert_tokenization!(
+        "abc{LF}{CRLF}",
+        [
+            unquoted_value("abc", 1, 1),
+            line_break(LineBreak::Lf, 1, 4),
+            line_break(LineBreak::CrLf, 2, 1),
+            end()
         ]
     );
 }
