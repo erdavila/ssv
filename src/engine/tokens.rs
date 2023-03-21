@@ -17,7 +17,7 @@ pub struct UnquotedValue<D: Domain>(pub D::String);
 pub struct QuotedValue<D: Domain>(pub D::String);
 
 #[derive(Debug)]
-pub struct Spacing<D: Domain>(D::String);
+pub struct Spacing<D: Domain>(pub D::String);
 
 #[derive(Debug)]
 pub struct Comment<D: Domain>(D::String);

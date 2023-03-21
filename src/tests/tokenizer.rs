@@ -33,6 +33,9 @@ macro_rules! _assert_tokenization_domain_assertion {
     ($domain:ident, quoted_value, $($arg:tt),*) => {
         _assert_tokenization_domain_assertion_token!($domain, QuotedValue, $($arg),*);
     };
+    ($domain:ident, spacing, $($arg:tt),*) => {
+        _assert_tokenization_domain_assertion_token!($domain, Spacing, $($arg),*);
+    };
     ($_domain:ident, unpaired_quote_error, $($arg:tt),*) => {
         _assert_tokenization_domain_assertion_error!(UnpairedQuote, $($arg),*);
     };
@@ -98,12 +101,7 @@ fn unquoted_value_starting_with_quotes() {
 fn unquoted_value_followed_by_spacing() {
     assert_tokenization!(
         "abc {TAB} ",
-        [
-            unquoted_value("abc", 1, 1),
-            // TODO: make it work
-            // spacing(" {TAB} ", 1, 4),
-            // end(),
-        ]
+        [unquoted_value("abc", 1, 1), spacing(" {TAB} ", 1, 4), end()]
     );
 }
 
@@ -187,12 +185,7 @@ fn quoted_value_starting_with_quotes_and_line_break() {
 fn quoted_value_followed_by_spacing() {
     assert_tokenization!(
         "{Q}abc{Q} {TAB} ",
-        [
-            quoted_value("abc", 1, 1),
-            // TODO: make it work
-            // spacing(" {TAB} ", 1, 6),
-            // end(),
-        ]
+        [quoted_value("abc", 1, 1), spacing(" {TAB} ", 1, 6), end()]
     );
 }
 
@@ -222,12 +215,7 @@ fn quoted_value_followed_by_line_break() {
 fn quoted_value_containing_only_quotes_followed_by_spacing() {
     assert_tokenization!(
         "{Q}{Q}{Q}{Q} {TAB} ",
-        [
-            quoted_value("{Q}", 1, 1),
-            // TODO: make it work
-            // spacing(" {TAB} ", 1, 5),
-            // end(),
-        ]
+        [quoted_value("{Q}", 1, 1), spacing(" {TAB} ", 1, 5), end()]
     );
 }
 
@@ -262,4 +250,47 @@ fn unclosed_quoted_value() {
 #[test]
 fn quoted_value_with_unpaired_quote() {
     assert_tokenization!("{Q}abc{Q}def", [unpaired_quote_error(1, 5)]);
+}
+
+#[test]
+fn spacing() {
+    assert_tokenization!(" {TAB} ", [spacing(" {TAB} ", 1, 1), end()]);
+}
+
+#[test]
+fn spacing_followed_by_unquoted_value() {
+    assert_tokenization!(
+        " {TAB} abc",
+        [spacing(" {TAB} ", 1, 1), unquoted_value("abc", 1, 4), end()]
+    );
+}
+
+#[test]
+fn spacing_followed_by_quoted_value() {
+    assert_tokenization!(
+        " {TAB} {Q}abc{Q}",
+        [spacing(" {TAB} ", 1, 1), quoted_value("abc", 1, 4), end()]
+    );
+}
+
+#[test]
+fn spacing_followed_by_line_break() {
+    assert_tokenization!(
+        " {TAB} {LF}",
+        [
+            spacing(" {TAB} ", 1, 1),
+            // TODO: make it work
+            // line_break(LineBreak::Lf, 1, 4),
+            // end()
+        ]
+    );
+    assert_tokenization!(
+        " {TAB} {CRLF}",
+        [
+            spacing(" {TAB} ", 1, 1),
+            // TODO: make it work
+            // line_break(LineBreak::CrLf, 1, 4),
+            // end()
+        ]
+    );
 }

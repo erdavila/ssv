@@ -7,7 +7,7 @@ use crate::engine::tokens::UnquotedValue;
 use crate::engine::ReadError;
 
 use super::position::{Position, WithPosition};
-use super::tokens::{QuotedValue, Token};
+use super::tokens::{QuotedValue, Spacing, Token};
 use super::ReadResult;
 
 pub struct Tokenizer<D: Domain, R: Read> {
@@ -47,7 +47,7 @@ impl<D: Domain, R: Read> Tokenizer<D, R> {
         match &mut self.state {
             State::Begin => {
                 if D::is_spacing_element(element) {
-                    todo!()
+                    self.state = State::Spacing(D::String::from_element(element));
                 } else if element == D::QUOTE {
                     self.state = State::QuotesPrefix(1);
                 } else if element == D::LF {
@@ -159,7 +159,23 @@ impl<D: Domain, R: Read> Tokenizer<D, R> {
                     }
                 }
             }
-            State::Spacing(_) => todo!(),
+            State::Spacing(spacing) => {
+                if D::is_spacing_element(element) {
+                    spacing.push(element);
+                } else {
+                    let spacing = take(spacing);
+                    self.state = if element == D::QUOTE {
+                        State::QuotesPrefix(1)
+                    } else if element == D::LF {
+                        State::LfLineBreak
+                    } else if element == D::CR && next_element_is_lf!() {
+                        State::CrInLineBreak
+                    } else {
+                        State::UnquotedValue(D::String::from_element(element))
+                    };
+                    return Some(Ok(Token::Spacing(Spacing(spacing))));
+                }
+            }
             State::LfLineBreak => todo!(),
             State::CrInLineBreak => todo!(),
         }
@@ -196,7 +212,11 @@ impl<D: Domain, R: Read> Tokenizer<D, R> {
                 self.state = State::Begin;
                 Some(Ok(Token::QuotedValue(QuotedValue(value))))
             }
-            State::Spacing(_) => todo!(),
+            State::Spacing(spacing) => {
+                let spacing = take(spacing);
+                self.state = State::Begin;
+                Some(Ok(Token::Spacing(Spacing(spacing))))
+            }
             State::LfLineBreak => todo!(),
             State::CrInLineBreak => todo!(),
         }
