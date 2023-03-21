@@ -3,12 +3,19 @@ use std::iter::Peekable;
 use std::mem::take;
 
 use crate::engine::domain::{Domain, DomainString};
-use crate::engine::tokens::UnquotedValue;
 use crate::engine::{LineBreak, ReadError};
 
 use super::position::{Position, WithPosition};
-use super::tokens::{Comment, QuotedValue, Spacing, Token};
 use super::ReadResult;
+
+#[derive(Debug)]
+pub enum Token<D: Domain> {
+    UnquotedValue(D::String),
+    QuotedValue(D::String),
+    Spacing(D::String),
+    LineBreak(LineBreak),
+    Comment(D::String),
+}
 
 pub struct Tokenizer<D: Domain, R: Read> {
     elements: Peekable<D::ElementIterator<R>>,
@@ -80,7 +87,7 @@ impl<D: Domain, R: Read> Tokenizer<D, R> {
                     if let Some(next_state) = next_state {
                         let value = take(value);
                         self.state = next_state;
-                        return Some(Ok(Token::UnquotedValue(UnquotedValue(value))));
+                        return Some(Ok(Token::UnquotedValue(value)));
                     }
                 }
             }
@@ -112,7 +119,7 @@ impl<D: Domain, R: Read> Tokenizer<D, R> {
                     if let Some(next_state) = next_state_after_quoted_value {
                         let value = D::String::quotes((*count - 2) / 2);
                         self.state = next_state;
-                        return Some(Ok(Token::QuotedValue(QuotedValue(value))));
+                        return Some(Ok(Token::QuotedValue(value)));
                     } else {
                         let mut value = D::String::quotes(*count / 2);
                         value.push(element);
@@ -151,7 +158,7 @@ impl<D: Domain, R: Read> Tokenizer<D, R> {
                     if let Some(next_state) = next_state_after_quoted_value {
                         let value = take(value);
                         self.state = next_state;
-                        return Some(Ok(Token::QuotedValue(QuotedValue(value))));
+                        return Some(Ok(Token::QuotedValue(value)));
                     } else {
                         let mut position = self.position;
                         position.column_number -= 1;
@@ -173,7 +180,7 @@ impl<D: Domain, R: Read> Tokenizer<D, R> {
                     } else {
                         State::UnquotedValue(D::String::from_element(element))
                     };
-                    return Some(Ok(Token::Spacing(Spacing(spacing))));
+                    return Some(Ok(Token::Spacing(spacing)));
                 }
             }
             State::LfLineBreak => {
@@ -209,7 +216,7 @@ impl<D: Domain, R: Read> Tokenizer<D, R> {
                 if let Some(next_state) = next_line_break_state {
                     let comment = take(comment);
                     self.state = next_state;
-                    return Some(Ok(Token::Comment(Comment(comment))));
+                    return Some(Ok(Token::Comment(comment)));
                 } else {
                     comment.push(element);
                 }
@@ -225,13 +232,13 @@ impl<D: Domain, R: Read> Tokenizer<D, R> {
             State::UnquotedValue(value) => {
                 let value = take(value);
                 self.state = State::Begin;
-                Some(Ok(Token::UnquotedValue(UnquotedValue(value))))
+                Some(Ok(Token::UnquotedValue(value)))
             }
             State::QuoteInUnquotedValue(_) => Some(Err(ReadError::UnpairedQuote(self.position))),
             State::QuotesPrefix(count) => {
                 if *count % 2 == 0 {
                     let value = D::String::quotes((*count - 2) / 2);
-                    Some(Ok(Token::QuotedValue(QuotedValue(value))))
+                    Some(Ok(Token::QuotedValue(value)))
                 } else {
                     let mut position = self.position;
                     position.column_number += 1;
@@ -246,12 +253,12 @@ impl<D: Domain, R: Read> Tokenizer<D, R> {
             State::QuoteInQuotedValue(value) => {
                 let value = take(value);
                 self.state = State::Begin;
-                Some(Ok(Token::QuotedValue(QuotedValue(value))))
+                Some(Ok(Token::QuotedValue(value)))
             }
             State::Spacing(spacing) => {
                 let spacing = take(spacing);
                 self.state = State::Begin;
-                Some(Ok(Token::Spacing(Spacing(spacing))))
+                Some(Ok(Token::Spacing(spacing)))
             }
             State::LfLineBreak => {
                 self.state = State::Begin;
@@ -261,7 +268,7 @@ impl<D: Domain, R: Read> Tokenizer<D, R> {
             State::Comment(comment) => {
                 let comment = take(comment);
                 self.state = State::Begin;
-                Some(Ok(Token::Comment(Comment(comment))))
+                Some(Ok(Token::Comment(comment)))
             }
         }
     }

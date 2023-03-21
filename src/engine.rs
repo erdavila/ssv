@@ -9,7 +9,6 @@ mod options;
 mod position;
 mod reader;
 pub mod tokenizer;
-pub mod tokens;
 mod writer;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]

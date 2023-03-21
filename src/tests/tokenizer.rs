@@ -1,8 +1,7 @@
 use std::ops::Deref;
 
 use crate::engine::domain::{BytesDomain, CharsDomain};
-use crate::engine::tokenizer::Tokenizer;
-use crate::engine::tokens::Token;
+use crate::engine::tokenizer::{Token, Tokenizer};
 use crate::engine::{LineBreak, ReadError};
 use crate::tests::support::{CR, CRLF, LF, Q, TAB};
 use crate::{bformat, domain_format};
@@ -57,7 +56,10 @@ macro_rules! _assert_tokenization_domain_assertion_token {
     ($domain:ident, $expected_token:ident, $tokenizer:ident, $expected_value:expr, $expected_line_number:literal, $expected_column_number:literal) => {
         let token = $tokenizer.next().unwrap().unwrap();
         if let Token::$expected_token(value) = token.value {
-            _assert_tokenization_domain_assertion_token_value!($domain, value, $expected_value);
+            assert_eq!(
+                value,
+                _assert_tokenization_domain_value!($domain, $expected_value)
+            );
             assert_eq!(token.position.line_number, $expected_line_number);
             assert_eq!(token.position.column_number, $expected_column_number);
         } else {
@@ -66,12 +68,12 @@ macro_rules! _assert_tokenization_domain_assertion_token {
     };
 }
 
-macro_rules! _assert_tokenization_domain_assertion_token_value {
-    (_no_domain_, $value:ident, $expected_value:expr) => {
-        assert_eq!($value, $expected_value);
+macro_rules! _assert_tokenization_domain_value {
+    (_no_domain_, $string:expr) => {
+        $string
     };
-    ($domain:ident, $value:ident, $expected_value:expr) => {
-        assert_eq!($value.0, domain_format!($domain, $expected_value));
+    ($domain:ident, $string:literal) => {
+        domain_format!($domain, $string)
     };
 }
 
