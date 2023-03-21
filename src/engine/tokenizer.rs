@@ -7,7 +7,7 @@ use crate::engine::tokens::UnquotedValue;
 use crate::engine::{LineBreak, ReadError};
 
 use super::position::{Position, WithPosition};
-use super::tokens::{QuotedValue, Spacing, Token};
+use super::tokens::{Comment, QuotedValue, Spacing, Token};
 use super::ReadResult;
 
 pub struct Tokenizer<D: Domain, R: Read> {
@@ -55,7 +55,7 @@ impl<D: Domain, R: Read> Tokenizer<D, R> {
                 } else if element == D::CR && next_element_is_lf!() {
                     self.state = State::CrInLineBreak;
                 } else if element == D::HASH {
-                    todo!()
+                    self.state = State::Comment(D::String::new());
                 } else {
                     let value = D::String::from_element(element);
                     self.state = State::UnquotedValue(value)
@@ -185,6 +185,8 @@ impl<D: Domain, R: Read> Tokenizer<D, R> {
                     State::LfLineBreak
                 } else if element == D::CR && next_element_is_lf!() {
                     State::CrInLineBreak
+                } else if element == D::HASH {
+                    State::Comment(D::String::new())
                 } else {
                     State::UnquotedValue(D::String::from_element(element))
                 };
@@ -194,6 +196,23 @@ impl<D: Domain, R: Read> Tokenizer<D, R> {
                 assert_eq!(element, D::LF);
                 self.state = State::Begin;
                 return Some(Ok(Token::LineBreak(LineBreak::CrLf)));
+            }
+            State::Comment(comment) => {
+                let next_line_break_state = if element == D::LF {
+                    Some(State::LfLineBreak)
+                } else if element == D::CR && next_element_is_lf!() {
+                    Some(State::CrInLineBreak)
+                } else {
+                    None
+                };
+
+                if let Some(next_state) = next_line_break_state {
+                    let comment = take(comment);
+                    self.state = next_state;
+                    return Some(Ok(Token::Comment(Comment(comment))));
+                } else {
+                    comment.push(element);
+                }
             }
         }
 
@@ -239,6 +258,11 @@ impl<D: Domain, R: Read> Tokenizer<D, R> {
                 Some(Ok(Token::LineBreak(LineBreak::Lf)))
             }
             State::CrInLineBreak => unreachable!(),
+            State::Comment(comment) => {
+                let comment = take(comment);
+                self.state = State::Begin;
+                Some(Ok(Token::Comment(Comment(comment))))
+            }
         }
     }
 
@@ -304,4 +328,5 @@ enum State<D: Domain> {
     Spacing(D::String),
     LfLineBreak,
     CrInLineBreak,
+    Comment(D::String),
 }

@@ -39,6 +39,9 @@ macro_rules! _assert_tokenization_domain_assertion {
     ($_domain:ident, line_break, $($arg:tt),*) => {
         _assert_tokenization_domain_assertion_token!(_no_domain_, LineBreak, $($arg),*);
     };
+    ($domain:ident, comment, $($arg:tt),*) => {
+        _assert_tokenization_domain_assertion_token!($domain, Comment, $($arg),*);
+    };
     ($_domain:ident, unpaired_quote_error, $($arg:tt),*) => {
         _assert_tokenization_domain_assertion_error!(UnpairedQuote, $($arg),*);
     };
@@ -382,6 +385,75 @@ fn lf_line_break_following_a_value_and_followed_by_line_break() {
             line_break(LineBreak::Lf, 1, 4),
             line_break(LineBreak::CrLf, 2, 1),
             end()
+        ]
+    );
+}
+
+#[test]
+fn comment() {
+    assert_tokenization!("#comment", [comment("comment", 1, 1), end()]);
+}
+
+#[test]
+fn comment_containing_quote() {
+    assert_tokenization!("#com{Q}ment", [comment("com{Q}ment", 1, 1), end()]);
+}
+
+#[test]
+fn comment_containing_spacing() {
+    assert_tokenization!("#com ment", [comment("com ment", 1, 1), end()]);
+}
+
+#[test]
+fn comment_followed_by_line_break() {
+    assert_tokenization!(
+        "#comment{LF}",
+        [
+            comment("comment", 1, 1),
+            line_break(LineBreak::Lf, 1, 9),
+            end()
+        ]
+    );
+    assert_tokenization!(
+        "#comment{CRLF}",
+        [
+            comment("comment", 1, 1),
+            line_break(LineBreak::CrLf, 1, 9),
+            end()
+        ]
+    );
+}
+
+#[test]
+fn comment_following_line_break_following_a_value() {
+    assert_tokenization!(
+        "abc{LF}#comment",
+        [
+            unquoted_value("abc", 1, 1),
+            line_break(LineBreak::Lf, 1, 4),
+            comment("comment", 2, 1),
+            end()
+        ]
+    );
+    assert_tokenization!(
+        "abc{CRLF}#comment",
+        [
+            unquoted_value("abc", 1, 1),
+            line_break(LineBreak::CrLf, 1, 4),
+            comment("comment", 2, 1),
+            end()
+        ]
+    );
+}
+
+#[test]
+fn hash_after_spacing_is_not_comment() {
+    assert_tokenization!(
+        " {TAB} #not-a-comment",
+        [
+            spacing(" {TAB} ", 1, 1),
+            unquoted_value("#not-a-comment", 1, 4),
+            end(),
         ]
     );
 }
