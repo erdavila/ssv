@@ -19,4 +19,11 @@ macro_rules! domain_format {
     (CharsDomain, $string:literal) => {
         format!($string)
     };
+    ($domain:ident, [ $($value:tt),* $(,)? ] $(,)?)  => {
+        vec![
+            $(
+                domain_format!($domain, $value)
+            ),*
+        ]
+    };
 }

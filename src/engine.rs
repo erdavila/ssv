@@ -7,7 +7,7 @@ pub(crate) mod domain;
 mod fluent_writer;
 mod options;
 mod position;
-mod reader;
+pub mod reader;
 pub mod tokenizer;
 mod writer;
 
