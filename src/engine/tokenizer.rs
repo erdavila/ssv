@@ -1,6 +1,5 @@
 use std::io::Read;
-use std::iter::Peekable;
-use std::mem::take;
+use std::iter::{FusedIterator, Peekable};
 
 use crate::engine::domain::{Domain, DomainString};
 use crate::engine::{LineBreak, ReadError};
@@ -19,7 +18,7 @@ pub enum Token<D: Domain> {
 
 pub struct Tokenizer<D: Domain, R: Read> {
     elements: Peekable<D::ElementIterator<R>>,
-    state: State<D>,
+    state: Option<State<D>>,
     position: Position,
     current_token_position: Position,
 }
@@ -28,7 +27,7 @@ impl<D: Domain, R: Read> Tokenizer<D, R> {
     pub fn new(inner: R) -> Self {
         Tokenizer {
             elements: D::element_iterator(inner).peekable(),
-            state: State::Begin,
+            state: Some(State::Begin),
             position: Position {
                 line_number: 1,
                 column_number: 0,
@@ -40,7 +39,11 @@ impl<D: Domain, R: Read> Tokenizer<D, R> {
         }
     }
 
-    fn process_element(&mut self, element: D::Element) -> Option<ReadResult<Token<D>>> {
+    fn process(
+        &mut self,
+        element: D::Element,
+        state: State<D>,
+    ) -> ReadResult<(State<D>, Option<Token<D>>)> {
         macro_rules! next_element_is_lf {
             () => {
                 if let Some(Ok(element)) = self.elements.peek() {
@@ -51,27 +54,26 @@ impl<D: Domain, R: Read> Tokenizer<D, R> {
             };
         }
 
-        match &mut self.state {
+        let next_state = match state {
             State::Begin => {
                 if D::is_spacing_element(element) {
-                    self.state = State::Spacing(D::String::from_element(element));
+                    State::Spacing(D::String::from_element(element))
                 } else if element == D::QUOTE {
-                    self.state = State::QuotesPrefix(1);
+                    State::QuotesPrefix(1)
                 } else if element == D::LF {
-                    return Some(Ok(Token::LineBreak(LineBreak::Lf)));
+                    return Ok((state, Some(Token::LineBreak(LineBreak::Lf))));
                 } else if element == D::CR && next_element_is_lf!() {
-                    self.state = State::CrInLineBreak;
+                    State::CrInLineBreak
                 } else if element == D::HASH {
-                    self.state = State::Comment(D::String::new());
+                    State::Comment(D::String::new())
                 } else {
                     let value = D::String::from_element(element);
-                    self.state = State::UnquotedValue(value)
+                    State::UnquotedValue(value)
                 }
             }
-            State::UnquotedValue(value) => {
+            State::UnquotedValue(mut value) => {
                 if element == D::QUOTE {
-                    let value = take(value);
-                    self.state = State::QuoteInUnquotedValue(value);
+                    State::QuoteInUnquotedValue(value)
                 } else {
                     let next_state = if D::is_spacing_element(element) {
                         Some(State::Spacing(D::String::from_element(element)))
@@ -80,32 +82,31 @@ impl<D: Domain, R: Read> Tokenizer<D, R> {
                     } else if element == D::CR && next_element_is_lf!() {
                         Some(State::CrInLineBreak)
                     } else {
-                        value.push(element);
                         None
                     };
 
                     if let Some(next_state) = next_state {
-                        let value = take(value);
-                        self.state = next_state;
-                        return Some(Ok(Token::UnquotedValue(value)));
+                        return Ok((next_state, Some(Token::UnquotedValue(value))));
+                    } else {
+                        value.push(element);
+                        State::UnquotedValue(value)
                     }
                 }
             }
-            State::QuoteInUnquotedValue(value) => {
+            State::QuoteInUnquotedValue(mut value) => {
                 if element == D::QUOTE {
                     value.push(element);
-                    let value = take(value);
-                    self.state = State::UnquotedValue(value);
+                    State::UnquotedValue(value)
                 } else {
                     let mut position = self.position;
                     position.column_number -= 1;
-                    return Some(Err(ReadError::UnpairedQuote(position)));
+                    return Err(ReadError::UnpairedQuote(position));
                 }
             }
             State::QuotesPrefix(count) => {
                 if element == D::QUOTE {
-                    *count += 1;
-                } else if *count % 2 == 0 {
+                    State::QuotesPrefix(count + 1)
+                } else if count % 2 == 0 {
                     let next_state_after_quoted_value = if D::is_spacing_element(element) {
                         Some(State::Spacing(D::String::from_element(element)))
                     } else if element == D::LF {
@@ -117,33 +118,31 @@ impl<D: Domain, R: Read> Tokenizer<D, R> {
                     };
 
                     if let Some(next_state) = next_state_after_quoted_value {
-                        let value = D::String::quotes((*count - 2) / 2);
-                        self.state = next_state;
-                        return Some(Ok(Token::QuotedValue(value)));
+                        let value = D::String::quotes((count - 2) / 2);
+                        return Ok((next_state, Some(Token::QuotedValue(value))));
                     } else {
-                        let mut value = D::String::quotes(*count / 2);
+                        let mut value = D::String::quotes(count / 2);
                         value.push(element);
-                        self.state = State::UnquotedValue(value);
+                        State::UnquotedValue(value)
                     }
                 } else {
-                    let mut value = D::String::quotes((*count - 1) / 2);
+                    let mut value = D::String::quotes((count - 1) / 2);
                     value.push(element);
-                    self.state = State::QuotedValue(value);
+                    State::QuotedValue(value)
                 }
             }
-            State::QuotedValue(value) => {
+            State::QuotedValue(mut value) => {
                 if element == D::QUOTE {
-                    let value = take(value);
-                    self.state = State::QuoteInQuotedValue(value);
+                    State::QuoteInQuotedValue(value)
                 } else {
                     value.push(element);
+                    State::QuotedValue(value)
                 }
             }
-            State::QuoteInQuotedValue(value) => {
+            State::QuoteInQuotedValue(mut value) => {
                 if element == D::QUOTE {
                     value.push(element);
-                    let value = take(value);
-                    self.state = State::QuotedValue(value);
+                    State::QuotedValue(value)
                 } else {
                     let next_state_after_quoted_value = if D::is_spacing_element(element) {
                         Some(State::Spacing(D::String::from_element(element)))
@@ -156,22 +155,20 @@ impl<D: Domain, R: Read> Tokenizer<D, R> {
                     };
 
                     if let Some(next_state) = next_state_after_quoted_value {
-                        let value = take(value);
-                        self.state = next_state;
-                        return Some(Ok(Token::QuotedValue(value)));
+                        return Ok((next_state, Some(Token::QuotedValue(value))));
                     } else {
                         let mut position = self.position;
                         position.column_number -= 1;
-                        return Some(Err(ReadError::UnpairedQuote(position)));
+                        return Err(ReadError::UnpairedQuote(position));
                     }
                 }
             }
-            State::Spacing(spacing) => {
+            State::Spacing(mut spacing) => {
                 if D::is_spacing_element(element) {
                     spacing.push(element);
+                    State::Spacing(spacing)
                 } else {
-                    let spacing = take(spacing);
-                    self.state = if element == D::QUOTE {
+                    let next_state = if element == D::QUOTE {
                         State::QuotesPrefix(1)
                     } else if element == D::LF {
                         State::LfLineBreak
@@ -180,11 +177,11 @@ impl<D: Domain, R: Read> Tokenizer<D, R> {
                     } else {
                         State::UnquotedValue(D::String::from_element(element))
                     };
-                    return Some(Ok(Token::Spacing(spacing)));
+                    return Ok((next_state, Some(Token::Spacing(spacing))));
                 }
             }
             State::LfLineBreak => {
-                self.state = if D::is_spacing_element(element) {
+                let next_state = if D::is_spacing_element(element) {
                     State::Spacing(D::String::from_element(element))
                 } else if element == D::QUOTE {
                     State::QuotesPrefix(1)
@@ -197,14 +194,13 @@ impl<D: Domain, R: Read> Tokenizer<D, R> {
                 } else {
                     State::UnquotedValue(D::String::from_element(element))
                 };
-                return Some(Ok(Token::LineBreak(LineBreak::Lf)));
+                return Ok((next_state, Some(Token::LineBreak(LineBreak::Lf))));
             }
             State::CrInLineBreak => {
                 assert_eq!(element, D::LF);
-                self.state = State::Begin;
-                return Some(Ok(Token::LineBreak(LineBreak::CrLf)));
+                return Ok((State::Begin, Some(Token::LineBreak(LineBreak::CrLf))));
             }
-            State::Comment(comment) => {
+            State::Comment(mut comment) => {
                 let next_line_break_state = if element == D::LF {
                     Some(State::LfLineBreak)
                 } else if element == D::CR && next_element_is_lf!() {
@@ -214,71 +210,51 @@ impl<D: Domain, R: Read> Tokenizer<D, R> {
                 };
 
                 if let Some(next_state) = next_line_break_state {
-                    let comment = take(comment);
-                    self.state = next_state;
-                    return Some(Ok(Token::Comment(comment)));
+                    return Ok((next_state, Some(Token::Comment(comment))));
                 } else {
                     comment.push(element);
+                    State::Comment(comment)
                 }
             }
-        }
+        };
 
-        None
+        Ok((next_state, None))
     }
 
-    fn finish(&mut self) -> Option<ReadResult<Token<D>>> {
-        match &mut self.state {
-            State::Begin => None,
-            State::UnquotedValue(value) => {
-                let value = take(value);
-                self.state = State::Begin;
-                Some(Ok(Token::UnquotedValue(value)))
-            }
-            State::QuoteInUnquotedValue(_) => Some(Err(ReadError::UnpairedQuote(self.position))),
+    fn finish(&mut self, state: State<D>) -> ReadResult<Option<Token<D>>> {
+        match state {
+            State::Begin => Ok(None),
+            State::UnquotedValue(value) => Ok(Some(Token::UnquotedValue(value))),
+            State::QuoteInUnquotedValue(_) => Err(ReadError::UnpairedQuote(self.position)),
             State::QuotesPrefix(count) => {
-                if *count % 2 == 0 {
-                    let value = D::String::quotes((*count - 2) / 2);
-                    Some(Ok(Token::QuotedValue(value)))
+                if count % 2 == 0 {
+                    let value = D::String::quotes((count - 2) / 2);
+                    Ok(Some(Token::QuotedValue(value)))
                 } else {
                     let mut position = self.position;
                     position.column_number += 1;
-                    Some(Err(ReadError::UnclosedQuotedValue(position)))
+                    Err(ReadError::UnclosedQuotedValue(position))
                 }
             }
             State::QuotedValue(_) => {
                 let mut position = self.position;
                 position.column_number += 1;
-                Some(Err(ReadError::UnclosedQuotedValue(position)))
+                Err(ReadError::UnclosedQuotedValue(position))
             }
-            State::QuoteInQuotedValue(value) => {
-                let value = take(value);
-                self.state = State::Begin;
-                Some(Ok(Token::QuotedValue(value)))
-            }
-            State::Spacing(spacing) => {
-                let spacing = take(spacing);
-                self.state = State::Begin;
-                Some(Ok(Token::Spacing(spacing)))
-            }
-            State::LfLineBreak => {
-                self.state = State::Begin;
-                Some(Ok(Token::LineBreak(LineBreak::Lf)))
-            }
+            State::QuoteInQuotedValue(value) => Ok(Some(Token::QuotedValue(value))),
+            State::Spacing(spacing) => Ok(Some(Token::Spacing(spacing))),
+            State::LfLineBreak => Ok(Some(Token::LineBreak(LineBreak::Lf))),
             State::CrInLineBreak => unreachable!(),
-            State::Comment(comment) => {
-                let comment = take(comment);
-                self.state = State::Begin;
-                Some(Ok(Token::Comment(comment)))
-            }
+            State::Comment(comment) => Ok(Some(Token::Comment(comment))),
         }
     }
 
     fn include_current_token_position(
         &self,
-        token: Option<ReadResult<Token<D>>>,
+        token: Option<Token<D>>,
     ) -> Option<ReadResult<WithPosition<Token<D>>>> {
-        token.map(|result| {
-            result.map(|token| WithPosition {
+        token.map(|token| {
+            Ok(WithPosition {
                 value: token,
                 position: self.current_token_position,
             })
@@ -290,6 +266,8 @@ impl<D: Domain, R: Read> Iterator for Tokenizer<D, R> {
     type Item = ReadResult<WithPosition<Token<D>>>;
 
     fn next(&mut self) -> Option<Self::Item> {
+        let mut state = self.state.take()?;
+
         while let Some(result) = self.elements.next() {
             let element = match result {
                 Ok(element) => element,
@@ -297,32 +275,46 @@ impl<D: Domain, R: Read> Iterator for Tokenizer<D, R> {
             };
 
             self.position.column_number += 1;
-            if self.state == State::Begin {
+            if state == State::Begin {
                 self.current_token_position = self.position;
             }
 
-            let to_return = self.process_element(element);
-            let to_return = self.include_current_token_position(to_return);
-            if let Some(Ok(_)) = to_return {
-                if self.state != State::Begin {
-                    self.current_token_position = self.position;
+            match self.process(element, state) {
+                Ok((next_state, token)) => {
+                    let token = self.include_current_token_position(token);
+
+                    if token.is_some() && next_state != State::Begin {
+                        self.current_token_position = self.position;
+                    }
+
+                    if element == D::LF {
+                        self.position.line_number += 1;
+                        self.position.column_number = 0;
+                    }
+
+                    if token.is_some() {
+                        self.state = Some(next_state);
+                        return token;
+                    } else {
+                        state = next_state;
+                    }
                 }
-            }
-
-            if element == D::LF {
-                self.position.line_number += 1;
-                self.position.column_number = 0;
-            }
-
-            if to_return.is_some() {
-                return to_return;
+                Err(error) => {
+                    self.state = None;
+                    return Some(Err(error));
+                }
             }
         }
 
-        let to_return = self.finish();
-        self.include_current_token_position(to_return)
+        self.state = None;
+        match self.finish(state) {
+            Ok(token_option) => self.include_current_token_position(token_option),
+            Err(error) => Some(Err(error)),
+        }
     }
 }
+
+impl<D: Domain, R: Read> FusedIterator for Tokenizer<D, R> {}
 
 #[derive(PartialEq, Eq)]
 enum State<D: Domain> {
