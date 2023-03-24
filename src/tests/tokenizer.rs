@@ -408,3 +408,21 @@ fn hash_after_spacing_is_not_comment() {
         ]
     );
 }
+
+#[test]
+fn io_error() {
+    let input: &[u8] = b"a\nb\xFF"; // Invalid UTF-8
+
+    let tokenizer: Tokenizer<CharsDomain, _> = Tokenizer::new(input.deref());
+
+    let mut tokenizer = tokenizer.skip_while(|result| result.is_ok());
+
+    let error = tokenizer.next().unwrap().unwrap_err();
+    if let ReadError::IoError(io_error) = error {
+        assert_eq!(io_error.kind(), std::io::ErrorKind::InvalidData);
+    } else {
+        panic!("wrong error: {:?}", error);
+    }
+
+    assert!(tokenizer.next().is_none());
+}

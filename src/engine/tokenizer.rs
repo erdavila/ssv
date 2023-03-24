@@ -271,7 +271,10 @@ impl<D: Domain, R: Read> Iterator for Tokenizer<D, R> {
         while let Some(result) = self.elements.next() {
             let element = match result {
                 Ok(element) => element,
-                Err(_) => todo!(),
+                Err(io_error) => {
+                    self.state = None;
+                    return Some(Err(ReadError::IoError(io_error)));
+                }
             };
 
             self.position.column_number += 1;
