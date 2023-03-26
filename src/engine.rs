@@ -4,7 +4,7 @@ use std::fmt::Display;
 use self::position::Position;
 
 pub(crate) mod domain;
-mod fluent_writer;
+pub mod fluent_writer;
 mod options;
 mod position;
 pub mod reader;
@@ -49,14 +49,22 @@ impl Display for ReadError {
 
 #[derive(Debug)]
 pub enum WriteError {
+    InvalidSpacing,
     IoError(std::io::Error),
 }
 
 impl Error for WriteError {}
 
+impl From<std::io::Error> for WriteError {
+    fn from(io_error: std::io::Error) -> Self {
+        WriteError::IoError(io_error)
+    }
+}
+
 impl Display for WriteError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            WriteError::InvalidSpacing => write!(f, "invalid spacing"),
             WriteError::IoError(io_error) => write!(f, "IO error: {io_error}"),
         }
     }

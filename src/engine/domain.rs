@@ -4,8 +4,8 @@ use std::io::{BufRead, BufReader, Bytes, Read};
 pub trait Domain: Eq + Debug {
     type Element: Copy + Eq + Debug;
     type ElementIterator<R: Read>: Iterator<Item = std::io::Result<Self::Element>>;
-    type String: DomainString<Self::Element> + Default + Eq + Debug;
-    type StringSlice: ?Sized;
+    type String: DomainString<Self::Element>;
+    type StringSlice: DomainStringSlice<Self::Element> + ?Sized;
 
     const LF: Self::Element;
     const CR: Self::Element;
@@ -16,7 +16,7 @@ pub trait Domain: Eq + Debug {
     fn element_iterator<R: Read>(inner: R) -> Self::ElementIterator<R>;
 }
 
-pub trait DomainString<E>: Sized {
+pub trait DomainString<E>: Sized + Eq {
     fn new() -> Self;
     fn push(&mut self, element: E);
     fn quotes(length: usize) -> Self;
@@ -26,6 +26,10 @@ pub trait DomainString<E>: Sized {
         string.push(element);
         string
     }
+}
+
+pub trait DomainStringSlice<E> {
+    fn as_bytes(&self) -> &[u8];
 }
 
 #[derive(PartialEq, Eq, Debug)]
@@ -61,6 +65,12 @@ impl DomainString<u8> for Vec<u8> {
 
     fn quotes(length: usize) -> Self {
         [BytesDomain::QUOTE].repeat(length)
+    }
+}
+
+impl DomainStringSlice<u8> for [u8] {
+    fn as_bytes(&self) -> &[u8] {
+        self
     }
 }
 
@@ -100,6 +110,12 @@ impl DomainString<char> for String {
 
     fn quotes(length: usize) -> Self {
         Self::from_element(CharsDomain::QUOTE).repeat(length)
+    }
+}
+
+impl DomainStringSlice<char> for str {
+    fn as_bytes(&self) -> &[u8] {
+        self.as_bytes()
     }
 }
 
