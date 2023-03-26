@@ -10,6 +10,7 @@ use super::{WriteError, WriteResult};
 #[derive(Debug)]
 pub struct FluentWriter<D: Domain, W: Write> {
     inner: W,
+    state: State,
     phantom: PhantomData<D>,
 }
 
@@ -17,6 +18,7 @@ impl<D: Domain, W: Write> FluentWriter<D, W> {
     pub fn new(inner: W) -> Self {
         FluentWriter {
             inner,
+            state: State::LineBegin,
             phantom: PhantomData,
         }
     }
@@ -29,29 +31,48 @@ impl<D: Domain, W: Write> FluentWriter<D, W> {
         self.write_value_raw(value, true)
     }
 
-    fn write_value_raw(mut self, value: &D::StringSlice, quoted: bool) -> WriteResult<Self> {
+    fn write_value_raw(self, value: &D::StringSlice, quoted: bool) -> WriteResult<Self> {
+        let mut this = match self.state {
+            State::Value => self.write_spacing_raw(&[b' '])?,
+            State::Comment => self.write_line_break()?,
+            _ => self,
+        };
+
         let prepared_value = PreparedValue::from(value.as_bytes());
         let quoted = quoted || prepared_value.must_be_quoted;
 
         if quoted {
-            self.write(&[BytesDomain::QUOTE])?;
+            this.write(&[BytesDomain::QUOTE])?;
         }
-        self.write(&prepared_value.bytes)?;
+        this.write(&prepared_value.bytes)?;
         if quoted {
-            self.write(&[BytesDomain::QUOTE])?;
+            this.write(&[BytesDomain::QUOTE])?;
         }
 
-        Ok(self)
+        this.state = State::Value;
+        Ok(this)
     }
 
-    pub fn write_spacing(mut self, value: &D::StringSlice) -> WriteResult<Self> {
+    pub fn write_spacing(self, value: &D::StringSlice) -> WriteResult<Self> {
         let bytes = value.as_bytes();
         for byte in bytes {
             if !BytesDomain::is_spacing_element(*byte) {
                 return Err(WriteError::InvalidSpacing);
             }
         }
-        self.write(bytes)?;
+
+        let this = match self.state {
+            State::Comment => self.write_line_break()?,
+            _ => self,
+        };
+
+        this.write_spacing_raw(bytes)
+    }
+
+    fn write_spacing_raw(mut self, spacing_bytes: &[u8]) -> WriteResult<Self> {
+        self.write(spacing_bytes)?;
+
+        self.state = State::Spacing;
         Ok(self)
     }
 
@@ -65,13 +86,22 @@ impl<D: Domain, W: Write> FluentWriter<D, W> {
             LineBreak::CrLf => &[BytesDomain::CR, BytesDomain::LF],
         };
         self.write(bytes)?;
+
+        self.state = State::LineBegin;
         Ok(self)
     }
 
-    pub fn write_comment(mut self, comment: &D::StringSlice) -> WriteResult<Self> {
-        self.write(&[BytesDomain::HASH])?;
-        self.write(comment.as_bytes())?;
-        Ok(self)
+    pub fn write_comment(self, comment: &D::StringSlice) -> WriteResult<Self> {
+        let mut this = match self.state {
+            State::Value | State::Spacing | State::Comment => self.write_line_break()?,
+            _ => self,
+        };
+
+        this.write(&[BytesDomain::HASH])?;
+        this.write(comment.as_bytes())?;
+
+        this.state = State::Comment;
+        Ok(this)
     }
 
     fn write(&mut self, bytes: &[u8]) -> WriteResult<()> {
@@ -139,4 +169,12 @@ impl PreparedValue {
             must_be_quoted: only_quotes || spacing_or_line_break,
         }
     }
+}
+
+#[derive(Debug)]
+enum State {
+    Value,
+    Spacing,
+    LineBegin,
+    Comment,
 }

@@ -12,7 +12,7 @@ macro_rules! assert_fluent_write {
 }
 
 macro_rules! _assert_fluent_write_domain {
-    ($domain:ident, [ $( $method:ident ( $($arg:expr),* ) ),* ], $expected_output:literal ) => {
+    ($domain:ident, [ $( $method:ident ( $($arg:expr),* ) ),* $(,)? ], $expected_output:literal ) => {
         let mut destination = Vec::new();
 
         let fluent_writer: FluentWriter<$domain, _> = FluentWriter::new(&mut destination);
@@ -123,4 +123,128 @@ fn write_this_line_break() {
 #[test]
 fn write_comment() {
     assert_fluent_write!([write_comment("comment")], "#comment");
+}
+
+#[test]
+fn value_followed_by_value_has_auto_spacing_in_between() {
+    assert_fluent_write!([write_value("abc"), write_value("def")], "abc def");
+}
+
+#[test]
+fn value_followed_by_spacing() {
+    assert_fluent_write!([write_value("abc"), write_spacing(" {TAB} ")], "abc {TAB} ");
+}
+
+#[test]
+fn value_followed_by_line_break() {
+    assert_fluent_write!([write_value("abc"), write_line_break()], "abc{LF}");
+}
+
+#[test]
+fn value_followed_by_comment_has_auto_line_break_in_between() {
+    assert_fluent_write!(
+        [write_value("abc"), write_comment("comment")],
+        "abc{LF}#comment",
+    );
+}
+
+#[test]
+fn spacing_followed_by_value() {
+    assert_fluent_write!([write_spacing(" {TAB} "), write_value("abc")], " {TAB} abc");
+}
+
+#[test]
+fn spacing_followed_by_spacing() {
+    assert_fluent_write!(
+        [write_spacing("  "), write_spacing("{TAB}{TAB}")],
+        "  {TAB}{TAB}",
+    );
+}
+
+#[test]
+fn spacing_followed_by_line_break() {
+    assert_fluent_write!(
+        [write_spacing(" {TAB} "), write_line_break()],
+        " {TAB} {LF}",
+    );
+}
+
+#[test]
+fn spacing_followed_by_comment_has_auto_line_break_in_between() {
+    assert_fluent_write!(
+        [write_spacing(" "), write_comment("comment")],
+        " {LF}#comment",
+    );
+}
+
+#[test]
+fn line_break_followed_by_value() {
+    assert_fluent_write!([write_line_break(), write_value("abc")], "{LF}abc");
+}
+
+#[test]
+fn line_break_followed_by_spacing() {
+    assert_fluent_write!(
+        [write_line_break(), write_spacing(" {TAB} ")],
+        "{LF} {TAB} ",
+    );
+}
+
+#[test]
+fn line_break_followed_by_line_break() {
+    assert_fluent_write!([write_line_break(), write_line_break()], "{LF}{LF}");
+}
+
+#[test]
+fn line_break_followed_by_comment() {
+    assert_fluent_write!(
+        [write_line_break(), write_comment("comment")],
+        "{LF}#comment",
+    );
+}
+
+#[test]
+fn comment_followed_by_value_has_auto_line_break_in_between() {
+    assert_fluent_write!(
+        [write_comment("comment"), write_value("abc")],
+        "#comment{LF}abc",
+    );
+}
+
+#[test]
+fn comment_followed_by_spacing_has_auto_line_break_in_between() {
+    assert_fluent_write!(
+        [write_comment("comment"), write_spacing(" ")],
+        "#comment{LF} ",
+    );
+}
+
+#[test]
+fn comment_followed_by_line_break() {
+    assert_fluent_write!(
+        [write_comment("comment"), write_line_break()],
+        "#comment{LF}",
+    );
+}
+
+#[test]
+fn comment_followed_by_comment_has_auto_line_break_in_between() {
+    assert_fluent_write!(
+        [write_comment("comment-1"), write_comment("comment-2")],
+        "#comment-1{LF}#comment-2",
+    );
+}
+
+#[test]
+fn some_data() {
+    assert_fluent_write!(
+        [
+            write_value("abc"),
+            write_value("def ghi"),
+            write_line_break(),
+            write_value("123 456"),
+            write_value("789"),
+        ],
+        "abc {Q}def ghi{Q}{LF}{Q}123 456{Q} 789",
+    );
 }
