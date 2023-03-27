@@ -31,9 +31,16 @@ impl<D: Domain, W: Write> FluentWriter<D, W> {
         self.write_value_raw(value, true)
     }
 
-    fn write_value_raw(self, value: &D::StringSlice, quoted: bool) -> WriteResult<Self> {
+    fn write_value_raw(mut self, value: &D::StringSlice, quoted: bool) -> WriteResult<Self> {
         let mut this = match self.state {
-            State::Value => self.write_spacing_raw(&[b' '])?,
+            State::Value => {
+                Self::write_spacing_raw(
+                    &mut self.inner,
+                    self.options.default_spacing().as_bytes(),
+                    &mut self.state,
+                )?;
+                self
+            }
             State::Comment => self.write_line_break()?,
             _ => self,
         };
@@ -61,19 +68,23 @@ impl<D: Domain, W: Write> FluentWriter<D, W> {
             return Err(WriteError::InvalidSpacing);
         }
 
-        let this = match self.state {
+        let mut this = match self.state {
             State::Comment => self.write_line_break()?,
             _ => self,
         };
 
-        this.write_spacing_raw(spacing.as_bytes())
+        Self::write_spacing_raw(&mut this.inner, spacing.as_bytes(), &mut this.state)?;
+        Ok(this)
     }
 
-    fn write_spacing_raw(mut self, spacing_bytes: &[u8]) -> WriteResult<Self> {
-        self.write(spacing_bytes)?;
-
-        self.state = State::Spacing;
-        Ok(self)
+    fn write_spacing_raw(
+        writer: &mut W,
+        spacing_bytes: &[u8],
+        state: &mut State,
+    ) -> WriteResult<()> {
+        Self::write_raw(writer, spacing_bytes)?;
+        *state = State::Spacing;
+        Ok(())
     }
 
     pub fn write_line_break(self) -> WriteResult<Self> {
@@ -105,7 +116,11 @@ impl<D: Domain, W: Write> FluentWriter<D, W> {
     }
 
     fn write(&mut self, bytes: &[u8]) -> WriteResult<()> {
-        self.inner.write_all(bytes)?;
+        Self::write_raw(&mut self.inner, bytes)
+    }
+
+    fn write_raw(writer: &mut W, bytes: &[u8]) -> WriteResult<()> {
+        writer.write_all(bytes)?;
         Ok(())
     }
 

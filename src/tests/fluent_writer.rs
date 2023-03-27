@@ -18,7 +18,7 @@ macro_rules! _assert_fluent_write_domain {
         let fluent_writer: FluentWriter<$domain, _> = FluentWriter::new(&mut destination);
         fluent_writer
         $(
-            . $method ( $( _domain_arg!($domain, $arg) ),* ) .unwrap()
+            . $method ( $( _domain_arg!($domain, $method, $arg) ),* ) .unwrap()
         )*  .finish().unwrap();
 
         assert_eq!(destination, domain_format!(BytesDomain, $expected_output));
@@ -26,10 +26,13 @@ macro_rules! _assert_fluent_write_domain {
 }
 
 macro_rules! _domain_arg {
-    ($domain:ident, $arg:literal) => {
+    ($domain:ident, set_default_spacing, $arg:literal) => {
+        domain_format!($domain, $arg)
+    };
+    ($domain:ident, $_method:ident, $arg:literal) => {
         &domain_format!($domain, $arg)
     };
-    ($domain:ident, $value:expr) => {
+    ($domain:ident, $_method:ident, $value:expr) => {
         $value
     };
 }
@@ -363,4 +366,16 @@ fn set_always_quoted() {
 
     test_domain!(BytesDomain);
     test_domain!(CharsDomain);
+}
+
+#[test]
+fn default_spacing() {
+    assert_fluent_write!(
+        [
+            set_default_spacing(" {TAB} "),
+            write_value("abc"),
+            write_value("def"),
+        ],
+        "abc {TAB} def",
+    );
 }
