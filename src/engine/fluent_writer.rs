@@ -39,7 +39,10 @@ impl<D: Domain, W: Write> FluentWriter<D, W> {
         };
 
         let prepared_value = PreparedValue::from(value.as_bytes());
-        let quoted = quoted || prepared_value.must_be_quoted;
+        let quoted = quoted
+            || prepared_value.must_be_quoted
+            || (this.state == State::LineBegin
+                && prepared_value.bytes.first() == Some(&BytesDomain::HASH));
 
         if quoted {
             this.write(&[BytesDomain::QUOTE])?;
@@ -171,7 +174,7 @@ impl PreparedValue {
     }
 }
 
-#[derive(Debug)]
+#[derive(PartialEq, Eq, Debug)]
 enum State {
     Value,
     Spacing,

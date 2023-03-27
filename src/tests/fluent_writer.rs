@@ -248,3 +248,39 @@ fn some_data() {
         "abc {Q}def ghi{Q}{LF}{Q}123 456{Q} 789",
     );
 }
+#[test]
+fn value_automatically_quoted_to_disambiguate_against_comment() {
+    assert_fluent_write!([write_value("#not-a-comment")], "{Q}#not-a-comment{Q}");
+
+    assert_fluent_write!(
+        [write_line_break(), write_value("#not-a-comment")],
+        "{LF}{Q}#not-a-comment{Q}"
+    );
+
+    assert_fluent_write!(
+        [write_comment("comment"), write_value("#not-a-comment")],
+        "#comment{LF}{Q}#not-a-comment{Q}",
+    );
+
+    // Quoting is not needed in the following cases
+
+    assert_fluent_write!(
+        [write_value("abc"), write_value("#not-a-comment")],
+        "abc #not-a-comment",
+    );
+
+    assert_fluent_write!(
+        [write_spacing(" "), write_value("#not-a-comment")],
+        " #not-a-comment",
+    );
+
+    assert_fluent_write!(
+        [write_value("first-value-in-the-line")],
+        "first-value-in-the-line",
+    );
+
+    assert_fluent_write!(
+        [write_line_break(), write_value("first-value-in-the-line")],
+        "{LF}first-value-in-the-line",
+    );
+}
