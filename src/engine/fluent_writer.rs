@@ -166,8 +166,8 @@ impl<D: Domain, W: Write> FluentWriter<D, W> {
         &mut self.options
     }
 
-    pub fn set_options(mut self, options: &Options<D>) -> WriteResult<Self> {
-        self.options = options.clone();
+    pub fn set_options(mut self, options: Options<D>) -> WriteResult<Self> {
+        self.options = options;
         Ok(self)
     }
 }

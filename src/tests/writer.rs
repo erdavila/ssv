@@ -1,6 +1,7 @@
 use crate::engine::domain::{BytesDomain, CharsDomain, Domain};
 use crate::engine::writer::Writer;
-use crate::tests::support::{LF, Q, TAB};
+use crate::engine::LineBreak;
+use crate::tests::support::{CRLF, LF, Q, TAB};
 use crate::{bformat, domain_format, domain_format_ref};
 
 fn assert_writer<D, F>(f: F, expected: Vec<u8>)
@@ -151,6 +152,84 @@ fn row_writer_write_spacing() {
                 },
                 bformat!(
                     "abc {TAB} {Q}def ghi{Q}{LF}   #not-a-comment {Q}123 456{Q} 789{TAB} {TAB}{LF}"
+                ),
+            );
+        };
+    }
+
+    test_domain!(BytesDomain);
+    test_domain!(CharsDomain);
+}
+
+#[test]
+fn default_spacing() {
+    macro_rules! test_domain {
+        ($domain:ident) => {
+            assert_writer::<$domain, _>(
+                |writer| {
+                    writer
+                        .options_mut()
+                        .unwrap()
+                        .set_default_spacing(domain_format!($domain, " {TAB} "))
+                        .unwrap();
+                    writer
+                        .write_rows(domain_format_ref!(
+                            $domain,
+                            [["abc", "def ghi"], ["#not-a-comment", "123 456", "789"]],
+                        ))
+                        .unwrap();
+                },
+                bformat!("abc {TAB} {Q}def ghi{Q}{LF}{Q}#not-a-comment{Q} {TAB} {Q}123 456{Q} {TAB} 789{LF}"),
+            );
+        };
+    }
+
+    test_domain!(BytesDomain);
+    test_domain!(CharsDomain);
+}
+
+#[test]
+fn default_line_break() {
+    macro_rules! test_domain {
+        ($domain:ident) => {
+            assert_writer::<$domain, _>(
+                |writer| {
+                    writer
+                        .options_mut()
+                        .unwrap()
+                        .set_default_line_break(LineBreak::CrLf);
+                    writer
+                        .write_rows(domain_format_ref!(
+                            $domain,
+                            [["abc", "def ghi"], ["#not-a-comment", "123 456", "789"]],
+                        ))
+                        .unwrap();
+                },
+                bformat!("abc {Q}def ghi{Q}{CRLF}{Q}#not-a-comment{Q} {Q}123 456{Q} 789{CRLF}"),
+            );
+        };
+    }
+
+    test_domain!(BytesDomain);
+    test_domain!(CharsDomain);
+}
+
+#[test]
+fn always_quoted() {
+    macro_rules! test_domain {
+        ($domain:ident) => {
+            assert_writer::<$domain, _>(
+                |writer| {
+                    writer.options_mut().unwrap().set_always_quoted(true);
+                    writer
+                        .write_rows(domain_format_ref!(
+                            $domain,
+                            [["abc", "def ghi"], ["#not-a-comment", "123 456", "789"]],
+                        ))
+                        .unwrap();
+                },
+                bformat!(
+                    "{Q}abc{Q} {Q}def ghi{Q}{LF}{Q}#not-a-comment{Q} {Q}123 456{Q} {Q}789{Q}{LF}"
                 ),
             );
         };

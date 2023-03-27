@@ -74,16 +74,22 @@ impl<D: Domain, W: Write> Writer<D, W> {
         }
     }
 
-    pub fn options(&self) -> &Options<D> {
-        todo!()
+    pub fn options(&self) -> WriteResult<&Options<D>> {
+        match self.fluent.as_ref() {
+            Some(fluent) => Ok(fluent.options()),
+            None => todo!(),
+        }
     }
 
-    pub fn options_mut(&mut self) -> &mut Options<D> {
-        todo!()
+    pub fn options_mut(&mut self) -> WriteResult<&mut Options<D>> {
+        match self.fluent.as_mut() {
+            Some(fluent) => Ok(fluent.options_mut()),
+            None => todo!(),
+        }
     }
 
-    pub fn set_options(&mut self, _options: Options<D>) {
-        todo!()
+    pub fn set_options(&mut self, options: Options<D>) -> WriteResult<()> {
+        self.use_fluent(|fluent| fluent.set_options(options))
     }
 }
 
@@ -124,16 +130,16 @@ impl<'a, D: Domain, W: Write> RowWriter<'a, D, W> {
         self.writer.use_fluent(|fluent| fluent.write_line_break())
     }
 
-    pub fn options(&self) -> &Options<D> {
-        todo!()
+    pub fn options(&self) -> WriteResult<&Options<D>> {
+        self.writer.options()
     }
 
-    pub fn options_mut(&mut self) -> &mut Options<D> {
-        todo!()
+    pub fn options_mut(&mut self) -> WriteResult<&mut Options<D>> {
+        self.writer.options_mut()
     }
 
-    pub fn set_options(&mut self, _options: Options<D>) {
-        todo!()
+    pub fn set_options(&mut self, options: Options<D>) -> WriteResult<()> {
+        self.writer.set_options(options)
     }
 }
 
