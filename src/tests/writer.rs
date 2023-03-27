@@ -169,7 +169,6 @@ fn default_spacing() {
                 |writer| {
                     writer
                         .options_mut()
-                        .unwrap()
                         .set_default_spacing(domain_format!($domain, " {TAB} "))
                         .unwrap();
                     writer
@@ -194,10 +193,7 @@ fn default_line_break() {
         ($domain:ident) => {
             assert_writer::<$domain, _>(
                 |writer| {
-                    writer
-                        .options_mut()
-                        .unwrap()
-                        .set_default_line_break(LineBreak::CrLf);
+                    writer.options_mut().set_default_line_break(LineBreak::CrLf);
                     writer
                         .write_rows(domain_format_ref!(
                             $domain,
@@ -220,7 +216,7 @@ fn always_quoted() {
         ($domain:ident) => {
             assert_writer::<$domain, _>(
                 |writer| {
-                    writer.options_mut().unwrap().set_always_quoted(true);
+                    writer.options_mut().set_always_quoted(true);
                     writer
                         .write_rows(domain_format_ref!(
                             $domain,

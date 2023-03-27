@@ -10,6 +10,8 @@ pub struct Writer<D: Domain, W: Write> {
     fluent: Option<FluentWriter<D, W>>,
 }
 
+const INVALID_WRITER_MESSAGE: &str = "the Writer is invalid due to a previous error";
+
 impl<D: Domain, W: Write> Writer<D, W> {
     pub fn new(writer: W) -> Self {
         Writer {
@@ -55,37 +57,35 @@ impl<D: Domain, W: Write> Writer<D, W> {
     }
 
     pub fn finish(mut self) -> WriteResult<()> {
-        self.take_fluent()?.finish()
+        self.take_fluent().finish()
     }
 
     fn use_fluent<F>(&mut self, f: F) -> WriteResult<()>
     where
         F: FnOnce(FluentWriter<D, W>) -> WriteResult<FluentWriter<D, W>>,
     {
-        let fluent = self.take_fluent()?;
-        self.fluent = Some(f(fluent)?);
+        let fluent = self.take_fluent();
+        let fluent = f(fluent)?;
+        self.fluent = Some(fluent);
         Ok(())
     }
 
-    fn take_fluent(&mut self) -> WriteResult<FluentWriter<D, W>> {
-        match self.fluent.take() {
-            Some(fluent) => Ok(fluent),
-            None => todo!(),
-        }
+    fn take_fluent(&mut self) -> FluentWriter<D, W> {
+        self.fluent.take().expect(INVALID_WRITER_MESSAGE)
     }
 
-    pub fn options(&self) -> WriteResult<&Options<D>> {
-        match self.fluent.as_ref() {
-            Some(fluent) => Ok(fluent.options()),
-            None => todo!(),
-        }
+    pub fn options(&self) -> &Options<D> {
+        self.fluent
+            .as_ref()
+            .expect(INVALID_WRITER_MESSAGE)
+            .options()
     }
 
-    pub fn options_mut(&mut self) -> WriteResult<&mut Options<D>> {
-        match self.fluent.as_mut() {
-            Some(fluent) => Ok(fluent.options_mut()),
-            None => todo!(),
-        }
+    pub fn options_mut(&mut self) -> &mut Options<D> {
+        self.fluent
+            .as_mut()
+            .expect(INVALID_WRITER_MESSAGE)
+            .options_mut()
     }
 
     pub fn set_options(&mut self, options: Options<D>) -> WriteResult<()> {
@@ -130,11 +130,11 @@ impl<'a, D: Domain, W: Write> RowWriter<'a, D, W> {
         self.writer.use_fluent(|fluent| fluent.write_line_break())
     }
 
-    pub fn options(&self) -> WriteResult<&Options<D>> {
+    pub fn options(&self) -> &Options<D> {
         self.writer.options()
     }
 
-    pub fn options_mut(&mut self) -> WriteResult<&mut Options<D>> {
+    pub fn options_mut(&mut self) -> &mut Options<D> {
         self.writer.options_mut()
     }
 
