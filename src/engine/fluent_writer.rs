@@ -88,7 +88,8 @@ impl<D: Domain, W: Write> FluentWriter<D, W> {
     }
 
     pub fn write_line_break(self) -> WriteResult<Self> {
-        self.write_this_line_break(LineBreak::Lf)
+        let line_break = self.default_line_break();
+        self.write_this_line_break(line_break)
     }
 
     pub fn write_this_line_break(mut self, line_break: LineBreak) -> WriteResult<Self> {

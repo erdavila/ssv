@@ -16,10 +16,10 @@ macro_rules! _assert_fluent_write_domain {
         let mut destination = Vec::new();
 
         let fluent_writer: FluentWriter<$domain, _> = FluentWriter::new(&mut destination);
-        fluent_writer
         $(
-            . $method ( $( _domain_arg!($domain, $method, $arg) ),* ) .unwrap()
-        )*  .finish().unwrap();
+            let fluent_writer = _assert_fluent_write_unwrap!($method, fluent_writer . $method ( $( _domain_arg!($domain, $method, $arg) ),* ));
+        )*
+        fluent_writer.finish().unwrap();
 
         assert_eq!(destination, domain_format!(BytesDomain, $expected_output));
     };
@@ -34,6 +34,15 @@ macro_rules! _domain_arg {
     };
     ($domain:ident, $_method:ident, $value:expr) => {
         $value
+    };
+}
+
+macro_rules! _assert_fluent_write_unwrap {
+    (set_default_line_break, $e:expr) => {
+        $e
+    };
+    ($_:ident, $e:expr) => {
+        $e.unwrap()
     };
 }
 
@@ -377,5 +386,21 @@ fn default_spacing() {
             write_value("def"),
         ],
         "abc {TAB} def",
+    );
+}
+
+#[test]
+fn default_line_break() {
+    assert_fluent_write!(
+        [
+            set_default_line_break(LineBreak::CrLf),
+            write_value("abc"),
+            write_comment("comment-1"),
+            write_spacing(" {TAB} "),
+            write_comment("comment-2"),
+            write_comment("comment-3"),
+            write_value("def"),
+        ],
+        "abc{CRLF}#comment-1{CRLF} {TAB} {CRLF}#comment-2{CRLF}#comment-3{CRLF}def",
     );
 }
