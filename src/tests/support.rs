@@ -27,3 +27,20 @@ macro_rules! domain_format {
         ]
     };
 }
+
+#[macro_export]
+macro_rules! domain_format_ref {
+    ($domain:ident, $string:literal) => {
+        {
+            use std::ops::Deref;
+            domain_format!($domain, $string).deref()
+        }
+    };
+    ($domain:ident, [ $($value:tt),* $(,)? ] $(,)?)  => {
+        vec![
+            $(
+                domain_format_ref!($domain, $value)
+            ),*
+        ]
+    };
+}

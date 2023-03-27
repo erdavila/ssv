@@ -9,7 +9,7 @@ mod options;
 mod position;
 pub mod reader;
 pub mod tokenizer;
-mod writer;
+pub mod writer;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum LineBreak {
