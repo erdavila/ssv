@@ -56,12 +56,9 @@ impl<D: Domain, W: Write> FluentWriter<D, W> {
         Ok(this)
     }
 
-    pub fn write_spacing(self, value: &D::StringSlice) -> WriteResult<Self> {
-        let bytes = value.as_bytes();
-        for byte in bytes {
-            if !BytesDomain::is_spacing_element(*byte) {
-                return Err(WriteError::InvalidSpacing);
-            }
+    pub fn write_spacing(self, spacing: &D::StringSlice) -> WriteResult<Self> {
+        if !D::is_valid_spacing(spacing) {
+            return Err(WriteError::InvalidSpacing);
         }
 
         let this = match self.state {
@@ -69,7 +66,7 @@ impl<D: Domain, W: Write> FluentWriter<D, W> {
             _ => self,
         };
 
-        this.write_spacing_raw(bytes)
+        this.write_spacing_raw(spacing.as_bytes())
     }
 
     fn write_spacing_raw(mut self, spacing_bytes: &[u8]) -> WriteResult<Self> {

@@ -1,18 +1,21 @@
 use std::fmt::Debug;
 use std::io::{BufRead, BufReader, Bytes, Read};
+use std::ops::Deref;
 
 pub trait Domain: Eq + Debug {
     type Element: Copy + Eq + Debug;
     type ElementIterator<R: Read>: Iterator<Item = std::io::Result<Self::Element>>;
-    type String: DomainString<Self::Element>;
-    type StringSlice: DomainStringSlice<Self::Element> + ?Sized;
+    type String: DomainString<Self::Element> + Deref<Target = Self::StringSlice>;
+    type StringSlice: DomainStringSlice<Self::Element> + ToOwned<Owned = Self::String> + ?Sized;
 
     const LF: Self::Element;
     const CR: Self::Element;
     const QUOTE: Self::Element;
+    const SPACE: Self::Element;
     const HASH: Self::Element;
 
     fn is_spacing_element(element: Self::Element) -> bool;
+    fn is_valid_spacing(spacing: &Self::StringSlice) -> bool;
     fn element_iterator<R: Read>(inner: R) -> Self::ElementIterator<R>;
 }
 
@@ -43,10 +46,15 @@ impl Domain for BytesDomain {
     const LF: Self::Element = b'\n';
     const CR: Self::Element = b'\r';
     const QUOTE: Self::Element = b'"';
+    const SPACE: Self::Element = b' ';
     const HASH: Self::Element = b'#';
 
     fn is_spacing_element(element: Self::Element) -> bool {
         matches!(element, b' ' | b'\t')
+    }
+
+    fn is_valid_spacing(spacing: &Self::StringSlice) -> bool {
+        !spacing.is_empty() && spacing.iter().all(|byte| Self::is_spacing_element(*byte))
     }
 
     fn element_iterator<R: Read>(inner: R) -> Self::ElementIterator<R> {
@@ -85,10 +93,15 @@ impl Domain for CharsDomain {
     const LF: Self::Element = '\n';
     const CR: Self::Element = '\r';
     const QUOTE: Self::Element = '"';
+    const SPACE: Self::Element = ' ';
     const HASH: Self::Element = '#';
 
     fn is_spacing_element(element: Self::Element) -> bool {
         matches!(element, ' ' | '\t')
+    }
+
+    fn is_valid_spacing(spacing: &Self::StringSlice) -> bool {
+        !spacing.is_empty() && spacing.chars().all(Self::is_spacing_element)
     }
 
     fn element_iterator<R: Read>(inner: R) -> Self::ElementIterator<R> {
