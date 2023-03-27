@@ -48,6 +48,7 @@ impl<D: Domain, W: Write> FluentWriter<D, W> {
         let prepared_value = PreparedValue::from(value.as_bytes());
         let quoted = quoted
             || prepared_value.must_be_quoted
+            || this.always_quoted()
             || (this.state == State::LineBegin
                 && prepared_value.bytes.first() == Some(&BytesDomain::HASH));
 

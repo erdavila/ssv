@@ -17,7 +17,7 @@ macro_rules! _assert_fluent_write_domain {
 
         let fluent_writer: FluentWriter<$domain, _> = FluentWriter::new(&mut destination);
         $(
-            let fluent_writer = _assert_fluent_write_unwrap!($method, fluent_writer . $method ( $( _domain_arg!($domain, $method, $arg) ),* ));
+            let fluent_writer = _assert_fluent_write_unwrap!($method, fluent_writer.$method ( $( _domain_arg!($domain, $method, $arg) ),* ));
         )*
         fluent_writer.finish().unwrap();
 
@@ -26,19 +26,28 @@ macro_rules! _assert_fluent_write_domain {
 }
 
 macro_rules! _domain_arg {
+    ($_:ident, true) => {
+        true
+    };
+    ($_:ident, false) => {
+        false
+    };
     ($domain:ident, set_default_spacing, $arg:literal) => {
         domain_format!($domain, $arg)
     };
     ($domain:ident, $_method:ident, $arg:literal) => {
         &domain_format!($domain, $arg)
     };
-    ($domain:ident, $_method:ident, $value:expr) => {
+    ($_domain:ident, $_method:ident, $value:expr) => {
         $value
     };
 }
 
 macro_rules! _assert_fluent_write_unwrap {
     (set_default_line_break, $e:expr) => {
+        $e
+    };
+    (set_always_quoted, $e:expr) => {
         $e
     };
     ($_:ident, $e:expr) => {
@@ -403,4 +412,43 @@ fn default_line_break() {
         ],
         "abc{CRLF}#comment-1{CRLF} {TAB} {CRLF}#comment-2{CRLF}#comment-3{CRLF}def",
     );
+}
+
+#[test]
+fn always_quoted() {
+    /*
+       This code should work:
+
+           assert_fluent_write!(
+               [
+                   set_always_quoted(true),
+                   write_value("abc"),
+               ],
+               "{Q}abc{Q}",
+           );
+
+       For some reason, the compiler complains at the `true`, as if it had ignored the first rule in `_domain_arg`.
+
+       The code below was obtained from the above by using the "Inline macro" command in VS Code, and it works.
+    */
+
+    let mut destination = Vec::new();
+    let fluent_writer: FluentWriter<BytesDomain, _> = FluentWriter::new(&mut destination);
+    fluent_writer
+        .set_always_quoted(_domain_arg!(BytesDomain, true))
+        .write_value(_domain_arg!(BytesDomain, write_value, "abc"))
+        .unwrap()
+        .finish()
+        .unwrap();
+    assert_eq!(destination, domain_format!(BytesDomain, "{Q}abc{Q}"));
+
+    let mut destination = Vec::new();
+    let fluent_writer: FluentWriter<CharsDomain, _> = FluentWriter::new(&mut destination);
+    fluent_writer
+        .set_always_quoted(_domain_arg!(CharsDomain, true))
+        .write_value(_domain_arg!(CharsDomain, write_value, "abc"))
+        .unwrap()
+        .finish()
+        .unwrap();
+    assert_eq!(destination, domain_format!(BytesDomain, "{Q}abc{Q}"));
 }
