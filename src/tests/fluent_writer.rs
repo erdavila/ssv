@@ -284,3 +284,83 @@ fn value_automatically_quoted_to_disambiguate_against_comment() {
         "{LF}first-value-in-the-line",
     );
 }
+
+#[test]
+fn set_default_spacing() {
+    macro_rules! test_domain {
+        ($domain:ident) => {
+            let fluent_writer: FluentWriter<$domain, _> = FluentWriter::new(Vec::new());
+
+            let spacing = domain_format!($domain, " ");
+            assert_eq!(fluent_writer.default_spacing(), spacing);
+            assert_eq!(fluent_writer.options().default_spacing(), spacing);
+
+            let spacing = domain_format!($domain, " {TAB} ");
+            let mut fluent_writer = fluent_writer.set_default_spacing(spacing.clone()).unwrap();
+            assert_eq!(fluent_writer.default_spacing(), spacing);
+            assert_eq!(fluent_writer.options().default_spacing(), spacing);
+
+            let spacing = domain_format!($domain, "{TAB}{TAB}");
+            fluent_writer
+                .options_mut()
+                .set_default_spacing(spacing.clone())
+                .unwrap();
+            assert_eq!(fluent_writer.default_spacing(), spacing);
+            assert_eq!(fluent_writer.options().default_spacing(), spacing);
+        };
+    }
+
+    test_domain!(BytesDomain);
+    test_domain!(CharsDomain);
+}
+
+#[test]
+fn set_default_line_break() {
+    macro_rules! test_domain {
+        ($domain:ident) => {
+            let fluent_writer: FluentWriter<$domain, _> = FluentWriter::new(Vec::new());
+
+            assert_eq!(fluent_writer.default_line_break(), LineBreak::Lf);
+            assert_eq!(fluent_writer.options().default_line_break(), LineBreak::Lf);
+
+            let mut fluent_writer = fluent_writer.set_default_line_break(LineBreak::CrLf);
+            assert_eq!(fluent_writer.default_line_break(), LineBreak::CrLf);
+            assert_eq!(
+                fluent_writer.options().default_line_break(),
+                LineBreak::CrLf
+            );
+
+            fluent_writer
+                .options_mut()
+                .set_default_line_break(LineBreak::Lf);
+            assert_eq!(fluent_writer.default_line_break(), LineBreak::Lf);
+            assert_eq!(fluent_writer.options().default_line_break(), LineBreak::Lf);
+        };
+    }
+
+    test_domain!(BytesDomain);
+    test_domain!(CharsDomain);
+}
+
+#[test]
+fn set_always_quoted() {
+    macro_rules! test_domain {
+        ($domain:ident) => {
+            let fluent_writer: FluentWriter<$domain, _> = FluentWriter::new(Vec::new());
+
+            assert_eq!(fluent_writer.always_quoted(), false);
+            assert_eq!(fluent_writer.options().always_quoted(), false);
+
+            let mut fluent_writer = fluent_writer.set_always_quoted(true);
+            assert_eq!(fluent_writer.always_quoted(), true);
+            assert_eq!(fluent_writer.options().always_quoted(), true);
+
+            fluent_writer.options_mut().set_always_quoted(false);
+            assert_eq!(fluent_writer.always_quoted(), false);
+            assert_eq!(fluent_writer.options().always_quoted(), false);
+        };
+    }
+
+    test_domain!(BytesDomain);
+    test_domain!(CharsDomain);
+}

@@ -5,7 +5,7 @@ use crate::engine::LineBreak;
 
 use super::{WriteError, WriteResult};
 
-#[derive(Clone)]
+#[derive(Clone, Copy, Debug)]
 pub struct Options<D: Domain> {
     default_spacing: D::String,
     default_line_break: LineBreak,

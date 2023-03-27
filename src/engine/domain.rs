@@ -2,7 +2,7 @@ use std::fmt::Debug;
 use std::io::{BufRead, BufReader, Bytes, Read};
 use std::ops::Deref;
 
-pub trait Domain: Eq + Debug {
+pub trait Domain: Eq + Clone + Debug {
     type Element: Copy + Eq + Debug;
     type ElementIterator<R: Read>: Iterator<Item = std::io::Result<Self::Element>>;
     type String: DomainString<Self::Element> + Deref<Target = Self::StringSlice>;
@@ -19,7 +19,7 @@ pub trait Domain: Eq + Debug {
     fn element_iterator<R: Read>(inner: R) -> Self::ElementIterator<R>;
 }
 
-pub trait DomainString<E>: Sized + Eq {
+pub trait DomainString<E>: Sized + Clone + Eq + Debug {
     fn new() -> Self;
     fn push(&mut self, element: E);
     fn quotes(length: usize) -> Self;
@@ -35,7 +35,7 @@ pub trait DomainStringSlice<E> {
     fn as_bytes(&self) -> &[u8];
 }
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct BytesDomain;
 impl Domain for BytesDomain {
     type Element = u8;
@@ -82,7 +82,7 @@ impl DomainStringSlice<u8> for [u8] {
     }
 }
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct CharsDomain;
 impl Domain for CharsDomain {
     type Element = char;

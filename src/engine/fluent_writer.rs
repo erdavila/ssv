@@ -1,17 +1,17 @@
 use std::io::Write;
-use std::marker::PhantomData;
 
 use crate::engine::domain::Domain;
 use crate::engine::LineBreak;
 
 use super::domain::{BytesDomain, DomainStringSlice};
+use super::options::Options;
 use super::{WriteError, WriteResult};
 
 #[derive(Debug)]
 pub struct FluentWriter<D: Domain, W: Write> {
     inner: W,
     state: State,
-    phantom: PhantomData<D>,
+    options: Options<D>,
 }
 
 impl<D: Domain, W: Write> FluentWriter<D, W> {
@@ -19,7 +19,7 @@ impl<D: Domain, W: Write> FluentWriter<D, W> {
         FluentWriter {
             inner,
             state: State::LineBegin,
-            phantom: PhantomData,
+            options: Options::new(),
         }
     }
 
@@ -115,27 +115,43 @@ impl<D: Domain, W: Write> FluentWriter<D, W> {
     }
 
     pub fn default_spacing(&self) -> &D::StringSlice {
-        todo!()
+        self.options.default_spacing()
     }
 
-    pub fn set_default_spacing(self, _spacing: D::String) -> WriteResult<Self> {
-        todo!()
+    pub fn set_default_spacing(mut self, spacing: D::String) -> WriteResult<Self> {
+        self.options.set_default_spacing(spacing)?;
+        Ok(self)
     }
 
     pub fn default_line_break(&self) -> LineBreak {
-        todo!()
+        self.options.default_line_break()
     }
 
-    pub fn set_default_line_break(self, _line_break: LineBreak) -> WriteResult<Self> {
-        todo!()
+    pub fn set_default_line_break(mut self, line_break: LineBreak) -> Self {
+        self.options.set_default_line_break(line_break);
+        self
     }
 
     pub fn always_quoted(&self) -> bool {
-        todo!()
+        self.options.always_quoted()
     }
 
-    pub fn set_always_quoted(self, _always_quoted: bool) -> WriteResult<Self> {
-        todo!()
+    pub fn set_always_quoted(mut self, always_quoted: bool) -> Self {
+        self.options.set_always_quoted(always_quoted);
+        self
+    }
+
+    pub fn options(&self) -> &Options<D> {
+        &self.options
+    }
+
+    pub fn options_mut(&mut self) -> &mut Options<D> {
+        &mut self.options
+    }
+
+    pub fn set_options(mut self, options: &Options<D>) -> WriteResult<Self> {
+        self.options = options.clone();
+        Ok(self)
     }
 }
 
