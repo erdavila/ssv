@@ -11,8 +11,8 @@ use self::writer::Writer;
 
 pub(crate) mod domain;
 pub mod fluent_writer;
-mod options;
-mod position;
+pub mod options;
+pub mod position;
 pub mod reader;
 pub mod tokenizer;
 pub mod writer;
@@ -24,7 +24,7 @@ pub enum LineBreak {
 }
 
 pub type ReadResult<T> = Result<T, ReadError>;
-type WriteResult<T> = Result<T, WriteError>;
+pub type WriteResult<T> = Result<T, WriteError>;
 
 pub fn read_file<D: Domain, P: AsRef<Path>>(path: P) -> ReadResult<Reader<D, File>> {
     let file = File::open(path)?;

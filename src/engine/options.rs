@@ -51,6 +51,12 @@ impl<D: Domain> Options<D> {
     }
 }
 
+impl<D: Domain> Default for Options<D> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::bformat;
