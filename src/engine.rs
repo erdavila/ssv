@@ -1,7 +1,13 @@
 use std::error::Error;
 use std::fmt::Display;
+use std::fs::File;
+use std::io::{Read, Write};
+use std::path::Path;
 
+use self::domain::Domain;
 use self::position::Position;
+use self::reader::Reader;
+use self::writer::Writer;
 
 pub(crate) mod domain;
 pub mod fluent_writer;
@@ -17,8 +23,40 @@ pub enum LineBreak {
     CrLf,
 }
 
-type ReadResult<T> = Result<T, ReadError>;
+pub type ReadResult<T> = Result<T, ReadError>;
 type WriteResult<T> = Result<T, WriteError>;
+
+pub fn read_file<D: Domain, P: AsRef<Path>>(path: P) -> ReadResult<Reader<D, File>> {
+    let file = File::open(path)?;
+    let reader = read(file);
+    Ok(reader)
+}
+
+pub fn read<D: Domain, R: Read>(reader: R) -> Reader<D, R> {
+    Reader::new(reader)
+}
+
+pub fn write_file<'a, D: Domain, P: AsRef<Path>>(
+    path: P,
+    rows: impl IntoIterator<Item = impl IntoIterator<Item = &'a D::StringSlice>>,
+) -> WriteResult<()>
+where
+    D::StringSlice: 'a,
+{
+    let file = File::create(path)?;
+    write::<'a, D, _>(file, rows)
+}
+
+pub fn write<'a, D: Domain, W: Write>(
+    writer: W,
+    rows: impl IntoIterator<Item = impl IntoIterator<Item = &'a D::StringSlice>>,
+) -> WriteResult<()>
+where
+    D::StringSlice: 'a,
+{
+    let mut writer: Writer<D, _> = Writer::new(writer);
+    writer.write_rows(rows)
+}
 
 #[derive(Debug)]
 pub enum ReadError {
@@ -28,6 +66,12 @@ pub enum ReadError {
 }
 
 impl Error for ReadError {}
+
+impl From<std::io::Error> for ReadError {
+    fn from(io_error: std::io::Error) -> Self {
+        ReadError::IoError(io_error)
+    }
+}
 
 impl Display for ReadError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
