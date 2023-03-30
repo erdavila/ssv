@@ -9,7 +9,7 @@ use self::position::Position;
 use self::reader::Reader;
 use self::writer::Writer;
 
-pub(crate) mod domain;
+pub mod domain;
 pub mod fluent_writer;
 pub mod options;
 pub mod position;
