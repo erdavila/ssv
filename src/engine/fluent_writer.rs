@@ -1,3 +1,5 @@
+//! Writes SSV using a fluent interface. Automatically inserts delimiters.
+
 use std::io::Write;
 
 use crate::engine::domain::Domain;
@@ -7,6 +9,31 @@ use super::domain::{BytesDomain, DomainStringSlice};
 use super::options::Options;
 use super::{WriteError, WriteResult};
 
+/// Has a fluent interface to write SSV to a byte writer.
+#[doc = generic_item_warning_doc!("FluentWriter")]
+/// Spacing and line-breaks are automatically written as required.
+///
+/// The underlying byte writer is flushed when the [`FluentWriter`] is dropped.
+/// Eventual flush errors will be ignored. Prefer to explicitly call the
+/// [`finish`](FluentWriter::finish) method instead of letting the
+/// [`FluentWriter`] being dropped.
+///
+/// # Example
+///
+/// ```
+/// use ssv::chars::FluentWriter;
+/// let mut output = Vec::new();
+///
+/// let fluent_writer = FluentWriter::new(&mut output);
+///
+/// fluent_writer
+///     .write_value("value")?
+///     .write_value("another value")? // automatic spacing
+///     .write_line_break()?
+///     .write_value("finalvalue")?
+///     .finish()?;
+/// # Ok::<(), ssv::chars::WriteError>(())
+/// ```
 #[derive(Debug)]
 pub struct FluentWriter<D: Domain, W: Write> {
     inner: W,
@@ -15,6 +42,7 @@ pub struct FluentWriter<D: Domain, W: Write> {
 }
 
 impl<D: Domain, W: Write> FluentWriter<D, W> {
+    /// Creates an instance that writes SSV to the given byte writer.
     pub fn new(inner: W) -> Self {
         FluentWriter {
             inner,
@@ -23,10 +51,31 @@ impl<D: Domain, W: Write> FluentWriter<D, W> {
         }
     }
 
+    /// Writes a value.
+    ///
+    /// The value is enclosed in quotes if required (check the [rules](crate#rules))
+    /// or if the [`always_quoted`](FluentWriter::always_quoted) option is `true`.
+    ///
+    /// If the last wroten item was another value, then the
+    /// [default spacing](FluentWriter::default_spacing) is automatically written
+    /// before this value.
+    ///
+    /// If the last wroten item was a comment, then the
+    /// [default line-break](FluentWriter::default_line_break) is automatically
+    /// written before this value.
     pub fn write_value(self, value: &D::StringSlice) -> WriteResult<Self> {
         self.write_value_raw(value, false)
     }
 
+    /// Writes a value enclosed in quotes.
+    ///
+    /// If the last wroten item was another value, then the
+    /// [default spacing](FluentWriter::default_spacing) is automatically written
+    /// before this value.
+    ///
+    /// If the last wroten item was a comment, then the
+    /// [default line-break](FluentWriter::default_line_break) is automatically
+    /// written before this value.
     pub fn write_quoted_value(self, value: &D::StringSlice) -> WriteResult<Self> {
         self.write_value_raw(value, true)
     }
@@ -64,6 +113,11 @@ impl<D: Domain, W: Write> FluentWriter<D, W> {
         Ok(this)
     }
 
+    /// Writes the specified spacing.
+    ///
+    /// If the last wroten item was a comment, then the
+    /// [default line-break](FluentWriter::default_line_break) is automatically
+    /// written before this value.
     pub fn write_spacing(self, spacing: &D::StringSlice) -> WriteResult<Self> {
         if !D::is_valid_spacing(spacing) {
             return Err(WriteError::InvalidSpacing);
@@ -88,11 +142,13 @@ impl<D: Domain, W: Write> FluentWriter<D, W> {
         Ok(())
     }
 
+    /// Writes the [default line-break](FluentWriter::default_line_break).
     pub fn write_line_break(self) -> WriteResult<Self> {
         let line_break = self.default_line_break();
         self.write_this_line_break(line_break)
     }
 
+    /// Writes the specified line-break.
     pub fn write_this_line_break(mut self, line_break: LineBreak) -> WriteResult<Self> {
         let bytes: &[u8] = match line_break {
             LineBreak::Lf => &[BytesDomain::LF],
@@ -104,6 +160,13 @@ impl<D: Domain, W: Write> FluentWriter<D, W> {
         Ok(self)
     }
 
+    /// Writes the comment.
+    ///
+    /// The HASH sign (`#`) is written before the comment.
+    ///
+    /// If the last wroten item was a value, spacing, or another comment, then
+    /// the [default line-break](FluentWriter::default_line_break) is automatically
+    /// written before the HASH sign and the comment.
     pub fn write_comment(self, comment: &D::StringSlice) -> WriteResult<Self> {
         let mut this = match self.state {
             State::Value | State::Spacing | State::Comment => self.write_line_break()?,
@@ -126,46 +189,80 @@ impl<D: Domain, W: Write> FluentWriter<D, W> {
         Ok(())
     }
 
+    /// Finalizes the object by flushing the underlying byte writer.
+    ///
+    /// Prefer to explicitly call this method instead of letting the [`FluentWriter`]
+    /// being dropped.
     pub fn finish(mut self) -> WriteResult<()> {
         self.inner.flush()?;
         Ok(())
     }
 
+    /// Returns the default spacing used by the methods
+    /// [`write_value`](FluentWriter::write_value) and
+    /// [`write_quoted_value`](FluentWriter::write_quoted_value).
+    ///
+    /// This is the same as `self.options().default_spacing()`.
     pub fn default_spacing(&self) -> &D::StringSlice {
         self.options.default_spacing()
     }
 
+    /// Sets the [default spacing](FluentWriter::default_spacing).
+    ///
+    /// This has the same effect as `self.options_mut().set_default_spacing(spacing)`.
     pub fn set_default_spacing(mut self, spacing: D::String) -> WriteResult<Self> {
         self.options.set_default_spacing(spacing)?;
         Ok(self)
     }
 
+    /// Returns the default line-break used by the methods
+    /// [`write_value`](FluentWriter::write_value),
+    /// [`write_quoted_value`](FluentWriter::write_quoted_value),
+    /// [`write_spacing`](FluentWriter::write_spacing),
+    /// [`write_line_break`](FluentWriter::write_line_break) and
+    /// [`write_comment`](FluentWriter::write_comment).
+    ///
+    /// This is the same as `self.options().default_line_break()`.
     pub fn default_line_break(&self) -> LineBreak {
         self.options.default_line_break()
     }
 
+    /// Sets the [default line-break](FluentWriter::default_line_break).
+    ///
+    /// This has the same effect as `self.options_mut().set_default_line_break(line_break)`.
     pub fn set_default_line_break(mut self, line_break: LineBreak) -> Self {
         self.options.set_default_line_break(line_break);
         self
     }
 
+    /// Returns whether the [write_value](FluentWriter::write_value) should
+    /// automatically quote the values.
+    ///
+    /// This is the same as `self.options().always_quoted()`.
     pub fn always_quoted(&self) -> bool {
         self.options.always_quoted()
     }
 
+    /// Sets whether the [write_value](FluentWriter::write_value) should
+    /// automatically quote the values.
+    ///
+    /// This is the same as `self.options_mut().set_always_quoted(always_quoted)`.
     pub fn set_always_quoted(mut self, always_quoted: bool) -> Self {
         self.options.set_always_quoted(always_quoted);
         self
     }
 
+    /// Returns a reference to the associated [`Options`] object.
     pub fn options(&self) -> &Options<D> {
         &self.options
     }
 
+    /// Returns a mutable reference to the associated [`Options`] object.
     pub fn options_mut(&mut self) -> &mut Options<D> {
         &mut self.options
     }
 
+    /// Replaces the associated [`Options`] object.
     pub fn set_options(mut self, options: Options<D>) -> WriteResult<Self> {
         self.options = options;
         Ok(self)

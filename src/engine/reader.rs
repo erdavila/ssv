@@ -1,3 +1,5 @@
+//! Reads SSV in a row-oriented way.
+
 use std::io::Read;
 use std::iter::FusedIterator;
 
@@ -6,12 +8,35 @@ use crate::engine::domain::Domain;
 use super::tokenizer::{Token, Tokenizer};
 use super::ReadResult;
 
+/// Reads SSV rows from a byte reader.
+#[doc = generic_item_warning_doc!("Reader")]
+/// It is an iterator of SSV rows. Each row is [`Vec`] of values.
+///
+/// # Example
+///
+/// ```
+/// use ssv::chars::Reader;
+///
+/// let input = "value\nvalue";
+///
+/// let mut reader = Reader::new(input.as_bytes());
+///
+/// while let Some(result) = reader.next() {
+///     let row = result?;
+///     println!("Values in row:");
+///     for value in row {
+///         println!("  {value:?}");
+///     }
+/// }
+/// # Ok::<_, ssv::chars::ReadError>(())
+/// ```
 pub struct Reader<D: Domain, R: Read> {
     tokenizer: Tokenizer<D, R>,
     state: Option<State<D>>,
 }
 
 impl<D: Domain, R: Read> Reader<D, R> {
+    /// Creates an instance that reads SSV from the given byte reader.
     pub fn new(inner: R) -> Self {
         Reader {
             tokenizer: Tokenizer::new(inner),

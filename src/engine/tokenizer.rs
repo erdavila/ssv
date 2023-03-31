@@ -1,3 +1,5 @@
+//! Reads SSV token-by-token.
+
 use std::io::Read;
 use std::iter::{FusedIterator, Peekable};
 
@@ -7,15 +9,50 @@ use crate::engine::{LineBreak, ReadError};
 use super::position::{Position, WithPosition};
 use super::ReadResult;
 
+/// An SSV token.
+#[doc = generic_item_warning_doc!("Token")]
 #[derive(Debug)]
 pub enum Token<D: Domain> {
+    /// A value that is not enclosed in quotes.
     UnquotedValue(D::String),
+
+    /// A value that is enclosed in quotes.
     QuotedValue(D::String),
+
+    /// Spacing.
     Spacing(D::String),
+
+    /// Line-break.
     LineBreak(LineBreak),
+
+    /// Comment, without the HASH sign (`#`).
     Comment(D::String),
 }
 
+/// Reads SSV tokens from a byte reader.
+#[doc = generic_item_warning_doc!("Tokenizer")]
+/// It is an iterator of [`ReadResult`]`<`[`WithPosition`]`<`[`Token`]`<D>>>` values.
+///
+/// # Example
+///
+/// ```
+/// use ssv::chars::Tokenizer;
+///
+/// let input = "value";
+///
+/// let mut tokenizer = Tokenizer::new(input.as_bytes());
+///
+/// while let Some(result) = tokenizer.next() {
+///     let token = result?;
+///     println!(
+///         "Found token {:?} at {}:{}",
+///         token.value,
+///         token.position.line_number,
+///         token.position.column_number
+///     );
+/// }
+/// # Ok::<_, ssv::chars::ReadError>(())
+/// ```
 pub struct Tokenizer<D: Domain, R: Read> {
     elements: Peekable<D::ElementIterator<R>>,
     state: Option<State<D>>,
@@ -24,6 +61,7 @@ pub struct Tokenizer<D: Domain, R: Read> {
 }
 
 impl<D: Domain, R: Read> Tokenizer<D, R> {
+    /// Creates an instance that reads SSV from the given byte reader.
     pub fn new(inner: R) -> Self {
         Tokenizer {
             elements: D::element_iterator(inner).peekable(),

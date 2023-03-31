@@ -1,3 +1,5 @@
+//! Options for writing SSV.
+
 use std::ops::Deref;
 
 use crate::engine::domain::{Domain, DomainString};
@@ -5,6 +7,10 @@ use crate::engine::LineBreak;
 
 use super::{WriteError, WriteResult};
 
+/// The options for writing SSV content.
+#[doc = generic_item_warning_doc!("Options")]
+/// See the docs for [`FluentWriter`](crate::engine::fluent_writer::FluentWriter)
+/// and [`Writer`](crate::engine::writer::Writer) on how they use the options.
 #[derive(Clone, Copy, Debug)]
 pub struct Options<D: Domain> {
     default_spacing: D::String,
@@ -13,6 +19,7 @@ pub struct Options<D: Domain> {
 }
 
 impl<D: Domain> Options<D> {
+    /// Creates a new instance with default values.
     pub fn new() -> Self {
         Options {
             default_spacing: D::String::from_element(D::SPACE),
@@ -21,10 +28,12 @@ impl<D: Domain> Options<D> {
         }
     }
 
+    /// Returns the default spacing.
     pub fn default_spacing(&self) -> &D::StringSlice {
         &self.default_spacing
     }
 
+    /// Sets the default spacing.
     pub fn set_default_spacing(&mut self, spacing: D::String) -> WriteResult<()> {
         if !D::is_valid_spacing(spacing.deref()) {
             return Err(WriteError::InvalidSpacing);
@@ -34,18 +43,22 @@ impl<D: Domain> Options<D> {
         Ok(())
     }
 
+    /// Returns the default line-break.
     pub fn default_line_break(&self) -> LineBreak {
         self.default_line_break
     }
 
+    /// Sets the default line-break.
     pub fn set_default_line_break(&mut self, line_break: LineBreak) {
         self.default_line_break = line_break;
     }
 
+    /// Returns whether the values are always quoted.
     pub fn always_quoted(&self) -> bool {
         self.always_quoted
     }
 
+    /// Sets whether the values are always quoted.
     pub fn set_always_quoted(&mut self, always_quoted: bool) {
         self.always_quoted = always_quoted;
     }
